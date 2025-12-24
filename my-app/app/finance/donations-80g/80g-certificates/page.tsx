@@ -25,19 +25,15 @@ export default function Certificates80GPage() {
       status: 'issued',
       issuedAt: '2024-03-15T10:00:00Z',
       issuedBy: 'Admin',
-      createdAt: '2024-03-15T10:00:00Z',
-      updatedAt: '2024-03-15T10:00:00Z',
     },
   ]);
 
-  const handleGenerate = (certificateData: Omit<Certificate80G, 'id' | 'certificateNumber' | 'createdAt' | 'updatedAt'>) => {
+  const handleGenerate = (certificateData: Omit<Certificate80G, 'id' | 'certificateNumber'>) => {
     const certificateNumber = `80G/${new Date().getFullYear()}/${String(certificates.length + 1).padStart(4, '0')}`;
     const newCertificate: Certificate80G = {
       ...certificateData,
       id: `c${Date.now()}`,
       certificateNumber: certificateNumber,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
     };
     setCertificates([newCertificate, ...certificates]);
   };

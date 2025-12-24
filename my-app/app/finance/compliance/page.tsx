@@ -248,13 +248,6 @@ export default function CompliancePage() {
           <ComplianceDetailModal
             record={selectedRecord}
             onClose={() => setSelectedRecord(null)}
-            onMarkFiled={(recordId) => {
-              setRecords(records.map(r => 
-                r.id === recordId 
-                  ? { ...r, status: 'filed' as const, filingDate: new Date().toISOString().split('T')[0] }
-                  : r
-              ));
-            }}
           />
         )}
       </div>

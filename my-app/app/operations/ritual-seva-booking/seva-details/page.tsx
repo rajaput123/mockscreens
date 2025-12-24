@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import ModuleLayout from '../../../components/layout/ModuleLayout';
 import Modal from '../../../components/ui/Modal';
 import { getAllSevas, getSevaById, type Seva } from '../sevaData';
 
-export default function SevaDetailsPage() {
+function SevaDetailsContent() {
   const searchParams = useSearchParams();
   const [sevas, setSevas] = useState<Seva[]>([]);
   const [selectedSeva, setSelectedSeva] = useState<Seva | null>(null);
@@ -574,6 +574,16 @@ export default function SevaDetailsPage() {
         </Modal>
       )}
     </ModuleLayout>
+  );
+}
+
+export default function SevaDetailsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">
+      <div className="text-gray-500">Loading...</div>
+    </div>}>
+      <SevaDetailsContent />
+    </Suspense>
   );
 }
 

@@ -240,7 +240,7 @@ export default function IssueStockPage() {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <FoodIcon mealType={menu.mealType} size={24} />
+                      <FoodIcon mealType={menu.mealType ?? 'breakfast'} size={24} />
                       <div className="flex-1">
                         <div className="font-medium text-sm text-gray-900">{menu.name}</div>
                         <div className="text-xs text-gray-600">

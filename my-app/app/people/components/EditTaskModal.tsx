@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Modal } from '../../components';
 import { colors, spacing, typography, shadows } from '../../design-system';
-import { Task } from '../../task-assignment/types';
+import { Task } from '../task-assignment/types';
 
 interface EditTaskModalProps {
   isOpen: boolean;

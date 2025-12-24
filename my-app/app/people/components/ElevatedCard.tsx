@@ -10,6 +10,7 @@ interface ElevatedCardProps {
   title?: string;
   subtitle?: string;
   badge?: ReactNode;
+  elevation?: 'sm' | 'md' | 'lg';
 }
 
 export default function ElevatedCard({
@@ -19,6 +20,7 @@ export default function ElevatedCard({
   title,
   subtitle,
   badge,
+  elevation = 'lg',
 }: ElevatedCardProps) {
   return (
     <div
@@ -33,7 +35,7 @@ export default function ElevatedCard({
       style={{
         backgroundColor: colors.background.base,
         border: borders.styles.card,
-        boxShadow: shadows.lg,
+        boxShadow: elevation === 'sm' ? shadows.sm : elevation === 'md' ? shadows.md : shadows.lg,
       }}
     >
       {(title || subtitle || badge) && (

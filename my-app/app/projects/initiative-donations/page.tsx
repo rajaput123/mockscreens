@@ -1,6 +1,7 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import DonationFormModal from '../../components/donations/DonationFormModal';
@@ -23,7 +24,7 @@ interface Donation {
   status: 'completed' | 'pending' | 'failed';
 }
 
-export default function InitiativeDonationsPage() {
+function InitiativeDonationsContent() {
   const searchParams = useSearchParams();
   const module = navigationMenus.projects.find(m => m.id === 'initiative-donations');
   const subServices = module?.subServices || [];
@@ -768,6 +769,16 @@ export default function InitiativeDonationsPage() {
         }))}
       />
     </ModuleLayout>
+  );
+}
+
+export default function InitiativeDonationsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">
+      <div className="text-gray-500">Loading...</div>
+    </div>}>
+      <InitiativeDonationsContent />
+    </Suspense>
   );
 }
 

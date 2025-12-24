@@ -9,6 +9,7 @@ interface ModernCardProps {
   className?: string;
   hover?: boolean;
   elevation?: 'sm' | 'md' | 'lg' | 'xl';
+  style?: React.CSSProperties;
 }
 
 export default function ModernCard({
@@ -17,6 +18,7 @@ export default function ModernCard({
   className = '',
   hover = true,
   elevation = 'md',
+  style = {},
 }: ModernCardProps) {
   const shadowMap = {
     sm: shadows.sm,
@@ -49,6 +51,7 @@ export default function ModernCard({
         ...(hover && {
           '--hover-shadow': hoverShadowMap[elevation],
         } as React.CSSProperties),
+        ...style,
       }}
       onMouseEnter={(e) => {
         if (hover) {

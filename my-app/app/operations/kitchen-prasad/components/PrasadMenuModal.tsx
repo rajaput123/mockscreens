@@ -22,8 +22,8 @@ export default function PrasadMenuModal({ isOpen, onClose, editingMenu, temples,
     name: '',
     date: new Date().toISOString().split('T')[0],
     templeId: '',
-    category: null,
-    distributionPoint: null,
+    category: undefined,
+    distributionPoint: undefined,
     mealType: 'breakfast',
     items: [],
     startTime: '08:00',
@@ -55,8 +55,8 @@ export default function PrasadMenuModal({ isOpen, onClose, editingMenu, temples,
         name: '',
         date: new Date().toISOString().split('T')[0],
         templeId: '',
-        category: initialCategory || null,
-        distributionPoint: null,
+        category: initialCategory || undefined,
+        distributionPoint: undefined,
         mealType: 'breakfast',
         items: [],
         startTime: '08:00',
@@ -364,7 +364,7 @@ export default function PrasadMenuModal({ isOpen, onClose, editingMenu, temples,
               {/* Category Selector */}
               <div>
                 <CategorySelector
-                  selectedCategory={formData.category}
+                  selectedCategory={formData.category ?? null}
                   onSelect={(category) => handleChange('category', category)}
                   disabled={isCategoryLocked}
                   showDescriptions={true}
@@ -381,8 +381,8 @@ export default function PrasadMenuModal({ isOpen, onClose, editingMenu, temples,
               {formData.category && (
                 <div>
                   <DistributionPointSelector
-                    selectedPoint={formData.distributionPoint}
-                    category={formData.category}
+                    selectedPoint={formData.distributionPoint ?? null}
+                    category={formData.category ?? null}
                     onSelect={(point) => handleChange('distributionPoint', point)}
                     disabled={isCategoryLocked}
                   />

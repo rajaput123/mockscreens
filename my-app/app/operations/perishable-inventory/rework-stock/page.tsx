@@ -97,7 +97,8 @@ export default function ReworkStockPage() {
         ...selectedItem,
         currentStock: selectedItem.currentStock + quantity,
       };
-      updateItemStock(updatedItem);
+      // updateItemStock expects an itemId string
+      updateItemStock(updatedItem.id);
 
       // Record rework movement
       saveStockMovement({

@@ -1,6 +1,7 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Project } from '../../components/projects/types';
@@ -14,7 +15,7 @@ import ModuleLayout from '../../components/layout/ModuleLayout';
 import ModuleNavigation from '../../components/layout/ModuleNavigation';
 import { navigationMenus } from '../../components/navigation/navigationData';
 
-export default function InitiativeProjectsPage() {
+function InitiativeProjectsContent() {
   const searchParams = useSearchParams();
   const module = navigationMenus.projects.find(m => m.id === 'initiative-projects');
   const subServices = module?.subServices || [];
@@ -365,5 +366,15 @@ export default function InitiativeProjectsPage() {
         />
       )}
     </ModuleLayout>
+  );
+}
+
+export default function InitiativeProjectsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">
+      <div className="text-gray-500">Loading...</div>
+    </div>}>
+      <InitiativeProjectsContent />
+    </Suspense>
   );
 }

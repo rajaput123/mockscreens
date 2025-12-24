@@ -90,12 +90,8 @@ export default function HeroSection() {
       {/* Content */}
       <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <div className="space-y-8">
-          {/* Badge */}
-          <div className={`inline-block mb-4 ${animations.fadeInUp}`}>
-            <span className="px-6 py-2 bg-white/20 backdrop-blur-md text-white rounded-full text-sm font-medium border border-white/40 shadow-2xl">
-              ✨ Modern Temple Management Platform
-            </span>
-          </div>
+          
+          
 
           {/* Main Headline */}
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-serif font-bold text-white leading-tight drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]">
@@ -122,18 +118,9 @@ export default function HeroSection() {
               href="/login"
               className={`${animations.buttonHover} ${animations.buttonActive} px-8 py-4 bg-gradient-to-r from-amber-600 to-amber-700 text-white rounded-2xl font-semibold text-lg shadow-2xl hover:from-amber-700 hover:to-amber-800 transition-all duration-300 hover:scale-105`}
             >
-              Get Started
-            </Link>
-            <a
-              href="#features"
-              onClick={(e) => {
-                e.preventDefault();
-                document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className={`${animations.buttonHover} px-8 py-4 bg-white/10 backdrop-blur-md text-white rounded-2xl font-semibold text-lg border-2 border-white/30 hover:bg-white/20 transition-all duration-300 cursor-pointer`}
-            >
               Login
-            </a>
+            </Link>
+            
           </div>
 
           {/* Scroll Indicator */}

@@ -1,6 +1,7 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import CreateEventModal from '../../components/events/CreateEventModal';
@@ -53,7 +54,7 @@ interface Event {
   media?: EventMedia[];
 }
 
-export default function EventManagement() {
+function EventManagementContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const module = navigationMenus.projects.find(m => m.id === 'event-management');
@@ -1308,5 +1309,15 @@ export default function EventManagement() {
         </div>
       )}
     </ModuleLayout>
+  );
+}
+
+export default function EventManagement() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">
+      <div className="text-gray-500">Loading...</div>
+    </div>}>
+      <EventManagementContent />
+    </Suspense>
   );
 }

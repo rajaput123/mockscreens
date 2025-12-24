@@ -291,7 +291,7 @@ export default function MenuClusterView({
                         className="bg-white rounded-lg p-3 border border-gray-200"
                       >
                         <div className="flex items-center gap-2 mb-2">
-                          <FoodIcon mealType={menu.mealType} size={20} />
+                          <FoodIcon mealType={menu.mealType || 'breakfast'} size={20} />
                           <span className="font-medium text-sm text-gray-900">{menu.name}</span>
                         </div>
                         <div className="space-y-1">

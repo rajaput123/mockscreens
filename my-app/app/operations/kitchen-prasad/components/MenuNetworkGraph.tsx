@@ -211,7 +211,7 @@ export default function MenuNetworkGraph({
 
         {/* Nodes */}
         {nodes.map((node) => {
-          const color = getMealTypeColor(node.menu.mealType);
+          const color = getMealTypeColor(node.menu.mealType || 'breakfast');
           const statusColor = getStatusColor(node.menu.status);
           const isSelected = selectedNode === node.id;
           const isHovered = hoveredNode === node.id;
@@ -262,7 +262,7 @@ export default function MenuNetworkGraph({
                 height={size * 0.8}
               >
                 <div className="flex items-center justify-center w-full h-full text-white">
-                  <FoodIcon mealType={node.menu.mealType} size={size * 0.6} />
+                  <FoodIcon mealType={node.menu.mealType || 'breakfast'} size={size * 0.6} />
                 </div>
               </foreignObject>
 

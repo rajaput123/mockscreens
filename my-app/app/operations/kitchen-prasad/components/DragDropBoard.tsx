@@ -181,32 +181,22 @@ export default function DragDropBoard({
                           className="flex flex-col items-center justify-center h-full gap-2 animate-[bounce-in_0.3s_ease-out] group relative"
                           title={`${menu.name} - ${menu.items.map(i => i.name).join(', ')}`}
                         >
-                          <FoodIcon mealType={menu.mealType} size={32} className="text-white" />
+                          <FoodIcon mealType={menu.mealType || 'breakfast'} size={32} className="text-white" />
                           <div className="text-xs font-medium text-center truncate w-full">
                             {menu.name}
                           </div>
                           <div className="flex items-center justify-center gap-1 mt-1">
                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                              menu.prasadType === 'paid' 
+                              menu.category === 'COUNTER_PAID' || menu.category === 'SEVA_PRASAD_PAID'
                                 ? 'bg-amber-100 text-amber-700' 
                                 : 'bg-red-100 text-red-700'
                             }`}>
-                              {menu.prasadType === 'paid' ? 'Paid' : 'Free'}
+                              {menu.category === 'COUNTER_PAID' || menu.category === 'SEVA_PRASAD_PAID' ? 'Paid' : 'Free'}
                             </span>
                             <span className="text-xs opacity-75">
                               {menu.items.length} items
                             </span>
                           </div>
-                          {menu.prasadType === 'paid' && menu.totalRevenue && (
-                            <div className="text-[10px] text-amber-600 font-semibold mt-0.5">
-                              ₹{menu.totalRevenue.toLocaleString()}
-                            </div>
-                          )}
-                          {menu.prasadType === 'annadan' && menu.totalExpense && (
-                            <div className="text-[10px] text-red-600 font-semibold mt-0.5">
-                              ₹{menu.totalExpense.toLocaleString()}
-                            </div>
-                          )}
                           {/* Tooltip on hover */}
                           <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-200 z-50 pointer-events-none">
                             <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-xl max-w-xs whitespace-nowrap">
@@ -258,7 +248,7 @@ export default function DragDropBoard({
                   className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200 cursor-move hover:bg-gray-100 transition-all duration-200 group relative"
                   title={`${menu.name} - ${menu.items.map(i => i.name).join(', ')}`}
                 >
-                  <FoodIcon mealType={menu.mealType} size={20} />
+                  <FoodIcon mealType={menu.mealType || 'breakfast'} size={20} />
                   <span className="text-sm font-medium text-gray-700">{menu.name}</span>
                   {/* Tooltip on hover */}
                   <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-200 z-50 pointer-events-none">

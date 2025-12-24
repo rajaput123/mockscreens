@@ -552,9 +552,9 @@ export default function AddStockPage() {
               <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4 mb-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="font-semibold text-gray-900">{selectedItem.name}</div>
+                    <div className="font-semibold text-gray-900">{(selectedItem as any).name}</div>
                     <div className="text-sm text-gray-600">
-                      {selectedItem.category} • {selectedItem.unit}
+                      {(selectedItem as any).category} • {(selectedItem as any).unit}
                     </div>
                   </div>
                   <button
@@ -609,7 +609,7 @@ export default function AddStockPage() {
               {/* Quantity */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Quantity ({selectedItem.unit}) *
+                  Quantity ({(selectedItem as any).unit}) *
                 </label>
                 <input
                   type="number"
@@ -633,10 +633,10 @@ export default function AddStockPage() {
                   onChange={(e) => {
                     setFormData(prev => ({ ...prev, purchaseDate: e.target.value }));
                     // Recalculate expiry date
-                    if (selectedItem.expiryDays) {
+                    if ((selectedItem as any).expiryDays) {
                       const purchaseDate = new Date(e.target.value);
                       const expiryDate = new Date(purchaseDate);
-                      expiryDate.setDate(expiryDate.getDate() + selectedItem.expiryDays);
+                      expiryDate.setDate(expiryDate.getDate() + (selectedItem as any).expiryDays);
                       setFormData(prev => ({ ...prev, expiryDate: expiryDate.toISOString().split('T')[0] }));
                     }
                   }}

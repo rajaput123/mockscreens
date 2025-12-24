@@ -10,6 +10,7 @@ import {
   PrasadMenu,
   PrasadMenuItem 
 } from '../prasadData';
+import { PRASAD_CATEGORY } from '../prasadTypes';
 import { getAllTemples } from '../../temple-management/templeData';
 import PrasadMenuModal from '../components/PrasadMenuModal';
 import DragDropBoard from '../components/DragDropBoard';
@@ -76,9 +77,16 @@ export default function PlanPrasadMenuPage() {
       filtered = filtered.filter(m => m.status === statusFilter);
     }
 
-    // Filter by prasad type
+    // Filter by prasad type (migrated from old `prasadType` to `category`)
     if (prasadTypeFilter !== 'all') {
-      filtered = filtered.filter(m => m.prasadType === prasadTypeFilter);
+      if (prasadTypeFilter === 'annadan') {
+        filtered = filtered.filter(m => m.category === PRASAD_CATEGORY.ANNADAN);
+      } else if (prasadTypeFilter === 'paid') {
+        // "Paid" includes counter-paid and seva-paid categories
+        filtered = filtered.filter(
+          m => m.category === PRASAD_CATEGORY.COUNTER_PAID || m.category === PRASAD_CATEGORY.SEVA_PRASAD_PAID
+        );
+      }
     }
 
     // Limit to 6 for compact view
