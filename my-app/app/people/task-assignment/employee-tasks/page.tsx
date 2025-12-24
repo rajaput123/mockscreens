@@ -3,46 +3,177 @@
 import { useState } from 'react';
 import ModuleLayout from '../../../components/layout/ModuleLayout';
 import { Modal } from '../../../components';
-import { colors, spacing, typography, getStatusColor, getPriorityColor } from '../../../design-system';
+import { colors, spacing, typography, getStatusColor, getPriorityColor, shadows } from '../../../design-system';
+import { ModernCard, ElevatedCard } from '../../components';
+import UpdateStatusModal from '../../components/UpdateStatusModal';
+import { Task } from '../types';
 
-interface Task {
-  id: string;
-  title: string;
-  description: string;
-  priority: 'low' | 'medium' | 'high';
-  status: 'pending' | 'in-progress' | 'completed' | 'overdue';
-  dueDate: string;
-  category: string;
-  estimatedHours?: number;
-  actualHours?: number;
+// Extended Task interface with comments for UI
+interface TaskWithComments extends Task {
   comments?: Array<{ author: string; text: string; date: string }>;
 }
 
+// Mock tasks for current employee (in real app, filter by logged-in user)
+const mockTasks: TaskWithComments[] = [
+  {
+    id: 'task-1',
+    title: 'Prepare Morning Prasad',
+    description: 'Prepare prasad for morning darshan including rice, dal, and sweets. Ensure all items are fresh and properly prepared.',
+    assignedTo: 'emp-1',
+    assignedToName: 'You',
+    priority: 'high',
+    status: 'in-progress',
+    dueDate: new Date().toISOString(),
+    category: 'Kitchen',
+    timeBlock: 'morning',
+    estimatedHours: 4,
+    actualHours: 2,
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date().toISOString(),
+    comments: [
+      { author: 'Manager', text: 'Please ensure quality is maintained', date: '2024-01-24' },
+    ],
+  },
+  {
+    id: 'task-2',
+    title: 'Clean Main Hall',
+    description: 'Deep cleaning of main hall before evening aarti. Focus on floor, walls, and decorations.',
+    assignedTo: 'emp-1',
+    assignedToName: 'You',
+    priority: 'medium',
+    status: 'pending',
+    dueDate: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+    category: 'Maintenance',
+    timeBlock: 'afternoon',
+    estimatedHours: 2,
+    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    comments: [],
+  },
+  {
+    id: 'task-3',
+    title: 'Setup Sound System',
+    description: 'Setup and test sound system for evening aarti. Check all speakers and microphones.',
+    assignedTo: 'emp-1',
+    assignedToName: 'You',
+    priority: 'high',
+    status: 'pending',
+    dueDate: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+    category: 'Operations',
+    timeBlock: 'evening',
+    estimatedHours: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    comments: [],
+  },
+  {
+    id: 'task-4',
+    title: 'Review Inventory Stock',
+    description: 'Review and update inventory levels for perishable items. Create report for management.',
+    assignedTo: 'emp-1',
+    assignedToName: 'You',
+    priority: 'medium',
+    status: 'completed',
+    dueDate: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    category: 'Inventory',
+    timeBlock: 'morning',
+    estimatedHours: 3,
+    actualHours: 2.5,
+    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date().toISOString(),
+    comments: [
+      { author: 'You', text: 'Completed inventory check. All items accounted for.', date: '2024-01-24' },
+    ],
+  },
+  {
+    id: 'task-5',
+    title: 'Night Security Rounds',
+    description: 'Conduct security rounds of temple premises. Check all entry points and report any issues.',
+    assignedTo: 'emp-1',
+    assignedToName: 'You',
+    priority: 'high',
+    status: 'overdue',
+    dueDate: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    category: 'Security',
+    timeBlock: 'night',
+    estimatedHours: 2,
+    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    comments: [],
+  },
+];
+
 export default function EmployeeTasksPage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [tasks, setTasks] = useState<TaskWithComments[]>(mockTasks);
+  const [selectedTask, setSelectedTask] = useState<TaskWithComments | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterPriority, setFilterPriority] = useState<string>('all');
   const [newComment, setNewComment] = useState('');
 
-  const filteredTasks = tasks.filter(
-    (task) => filterStatus === 'all' || task.status === filterStatus
-  );
+  const filteredTasks = tasks.filter((task) => {
+    const matchesStatus = filterStatus === 'all' || task.status === filterStatus;
+    const matchesPriority = filterPriority === 'all' || task.priority === filterPriority;
+    return matchesStatus && matchesPriority;
+  });
+
+  const stats = {
+    total: tasks.length,
+    pending: tasks.filter((t) => t.status === 'pending').length,
+    inProgress: tasks.filter((t) => t.status === 'in-progress').length,
+    completed: tasks.filter((t) => t.status === 'completed').length,
+    overdue: tasks.filter((t) => t.status === 'overdue').length,
+  };
 
   const handleCardClick = (task: Task) => {
     setSelectedTask(task);
     setIsModalOpen(true);
   };
 
-  const handleStatusUpdate = (taskId: string, newStatus: Task['status']) => {
+  const handleStatusUpdate = (taskId: string, newStatus: TaskWithComments['status']) => {
     setTasks((prev) =>
       prev.map((task) => (task.id === taskId ? { ...task, status: newStatus } : task))
     );
+    if (selectedTask?.id === taskId) {
+      setSelectedTask({ ...selectedTask, status: newStatus });
+    }
+    setIsStatusModalOpen(false);
+    alert(`Task status updated to ${newStatus}!`);
   };
 
   const handleAddComment = () => {
     if (!selectedTask || !newComment.trim()) return;
-    // API call would go here
+    
+    const updatedTasks = tasks.map((task) => {
+      if (task.id === selectedTask.id) {
+        return {
+          ...task,
+          comments: [
+            ...(task.comments || []),
+            {
+              author: 'You', // In real app, get from auth context
+              text: newComment,
+              date: new Date().toISOString().split('T')[0],
+            },
+          ],
+        };
+      }
+      return task;
+    });
+
+    setTasks(updatedTasks);
+    setSelectedTask({
+      ...selectedTask,
+      comments: [
+        ...(selectedTask.comments || []),
+        {
+          author: 'You',
+          text: newComment,
+          date: new Date().toISOString().split('T')[0],
+        },
+      ],
+    });
     setNewComment('');
     alert('Comment added successfully!');
   };
@@ -50,127 +181,141 @@ export default function EmployeeTasksPage() {
   return (
     <ModuleLayout
       title="My Tasks"
-      description="View tasks assigned to you"
+      description="View and manage tasks assigned to you"
     >
-      {/* Filter */}
-      <div
-        className="rounded-3xl p-6 mb-6"
-        style={{
-          backgroundColor: colors.background.base,
-          border: `1px solid ${colors.border}`,
-          padding: spacing.xl,
-        }}
-      >
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="w-full md:w-auto px-4 py-2 rounded-2xl border focus:outline-none focus:ring-2"
-          style={{
-            borderColor: colors.border,
-            fontFamily: typography.body.fontFamily,
-            fontSize: typography.body.fontSize,
-          }}
-        >
-          <option value="all">All Status</option>
-          <option value="pending">Pending</option>
-          <option value="in-progress">In Progress</option>
-          <option value="completed">Completed</option>
-          <option value="overdue">Overdue</option>
-        </select>
+      {/* Stats Overview */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <ModernCard elevation="md">
+          <div className="p-4 text-center">
+            <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+            <p className="text-xs text-gray-500 mt-1">Total</p>
+          </div>
+        </ModernCard>
+        <ModernCard elevation="md">
+          <div className="p-4 text-center">
+            <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
+            <p className="text-xs text-gray-500 mt-1">Pending</p>
+          </div>
+        </ModernCard>
+        <ModernCard elevation="md">
+          <div className="p-4 text-center">
+            <p className="text-2xl font-bold text-blue-600">{stats.inProgress}</p>
+            <p className="text-xs text-gray-500 mt-1">In Progress</p>
+          </div>
+        </ModernCard>
+        <ModernCard elevation="md">
+          <div className="p-4 text-center">
+            <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
+            <p className="text-xs text-gray-500 mt-1">Completed</p>
+          </div>
+        </ModernCard>
+        <ModernCard elevation="md">
+          <div className="p-4 text-center">
+            <p className="text-2xl font-bold text-red-600">{stats.overdue}</p>
+            <p className="text-xs text-gray-500 mt-1">Overdue</p>
+          </div>
+        </ModernCard>
       </div>
+
+      {/* Filters */}
+      <ModernCard elevation="md" className="mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block mb-2 text-sm font-semibold text-gray-700">Filter by Status</label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full px-4 py-2 rounded-2xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all shadow-sm bg-white"
+            >
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="in-progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="overdue">Overdue</option>
+            </select>
+          </div>
+          <div>
+            <label className="block mb-2 text-sm font-semibold text-gray-700">Filter by Priority</label>
+            <select
+              value={filterPriority}
+              onChange={(e) => setFilterPriority(e.target.value)}
+              className="w-full px-4 py-2 rounded-2xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all shadow-sm bg-white"
+            >
+              <option value="all">All Priority</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+        </div>
+      </ModernCard>
 
       {/* Tasks Grid */}
       {filteredTasks.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTasks.map((task) => (
-            <div
+            <ElevatedCard
               key={task.id}
               onClick={() => handleCardClick(task)}
-              className="rounded-3xl p-6 cursor-pointer transition-all hover:scale-105 hover:shadow-lg"
-              style={{
-                backgroundColor: colors.background.base,
-                border: `1px solid ${colors.border}`,
-                padding: spacing.xl,
-              }}
+              elevation="lg"
+              className="cursor-pointer transition-all hover:scale-[1.02]"
             >
-              <div className="flex items-start justify-between mb-3">
-                <h3
-                  style={{
-                    fontFamily: typography.sectionHeader.fontFamily,
-                    fontSize: typography.sectionHeader.fontSize,
-                    fontWeight: typography.sectionHeader.fontWeight,
-                    color: colors.text.primary,
-                    flex: 1,
-                  }}
-                >
-                  {task.title}
-                </h3>
-                <span
-                  className="px-2 py-1 rounded-lg text-xs"
-                  style={{
-                    backgroundColor: getPriorityColor(task.priority) + '20',
-                    color: getPriorityColor(task.priority),
-                    fontFamily: typography.body.fontFamily,
-                    fontWeight: 500,
-                  }}
-                >
-                  {task.priority}
-                </span>
+              <div className="space-y-4">
+                <div className="flex items-start justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900 flex-1 pr-2 line-clamp-2">
+                    {task.title}
+                  </h3>
+                  <span
+                    className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${
+                      task.priority === 'high'
+                        ? 'bg-red-100 text-red-700'
+                        : task.priority === 'medium'
+                        ? 'bg-yellow-100 text-yellow-700'
+                        : 'bg-green-100 text-green-700'
+                    }`}
+                  >
+                    {task.priority}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600 line-clamp-2">{task.description}</p>
+                <div className="flex items-center justify-between pt-3 border-t border-gray-200">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-gray-500">
+                      Due: {new Date(task.dueDate).toLocaleDateString()}
+                    </span>
+                    <span className="text-xs text-gray-400 capitalize">{task.timeBlock}</span>
+                  </div>
+                  <span
+                    className={`px-3 py-1 rounded-xl text-xs font-medium ${
+                      task.status === 'completed'
+                        ? 'bg-green-100 text-green-700'
+                        : task.status === 'in-progress'
+                        ? 'bg-blue-100 text-blue-700'
+                        : task.status === 'overdue'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-yellow-100 text-yellow-700'
+                    }`}
+                  >
+                    {task.status.replace('-', ' ')}
+                  </span>
+                </div>
+                {task.comments && task.comments.length > 0 && (
+                  <div className="pt-2 border-t border-gray-100">
+                    <span className="text-xs text-gray-500">
+                      {task.comments.length} {task.comments.length === 1 ? 'comment' : 'comments'}
+                    </span>
+                  </div>
+                )}
               </div>
-              <p
-                style={{
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                  color: colors.text.muted,
-                  marginBottom: spacing.sm,
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                }}
-              >
-                {task.description}
-              </p>
-              <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: colors.border }}>
-                <span
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: '12px',
-                    color: colors.text.muted,
-                  }}
-                >
-                  Due: {task.dueDate}
-                </span>
-                <span
-                  className="px-3 py-1 rounded-xl text-xs"
-                  style={{
-                    backgroundColor: getStatusColor(task.status) + '20',
-                    color: getStatusColor(task.status),
-                    fontFamily: typography.body.fontFamily,
-                    fontWeight: 500,
-                  }}
-                >
-                  {task.status}
-                </span>
-              </div>
-            </div>
+            </ElevatedCard>
           ))}
         </div>
       ) : (
-        <div
-          className="rounded-3xl p-12 text-center"
-          style={{
-            backgroundColor: colors.background.base,
-            border: `1px solid ${colors.border}`,
-            padding: spacing.xl,
-          }}
-        >
+        <ModernCard elevation="md" className="text-center p-12">
           <svg
-            className="mx-auto mb-4"
-            width="64"
-            height="64"
+            className="mx-auto mb-4 w-16 h-16 text-gray-400"
             fill="none"
-            stroke={colors.text.muted}
+            stroke="currentColor"
             viewBox="0 0 24 24"
           >
             <path
@@ -180,18 +325,12 @@ export default function EmployeeTasksPage() {
               d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
             />
           </svg>
-          <p
-            style={{
-              fontFamily: typography.body.fontFamily,
-              fontSize: typography.body.fontSize,
-              color: colors.text.muted,
-            }}
-          >
-            {filterStatus === 'all'
-              ? 'No tasks assigned to you yet.'
-              : `No ${filterStatus} tasks found.`}
+          <p className="text-gray-600">
+            {filterStatus !== 'all' || filterPriority !== 'all'
+              ? 'No tasks found matching your filters.'
+              : 'No tasks assigned to you yet.'}
           </p>
-        </div>
+        </ModernCard>
       )}
 
       {/* Task Detail Modal */}
@@ -204,184 +343,83 @@ export default function EmployeeTasksPage() {
         {selectedTask && (
           <div className="space-y-6">
             <div>
-              <p
-                style={{
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                  color: colors.text.muted,
-                  marginBottom: spacing.sm,
-                }}
-              >
-                {selectedTask.description}
-              </p>
+              <p className="text-gray-600 mb-4">{selectedTask.description}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: '12px',
-                    color: colors.text.muted,
-                    marginBottom: spacing.xs,
-                  }}
+                <p className="text-xs text-gray-500 mb-2">Status</p>
+                <button
+                  onClick={() => setIsStatusModalOpen(true)}
+                  className={`w-full px-3 py-2 rounded-xl text-sm font-medium text-left transition-all hover:scale-105 ${
+                    selectedTask.status === 'completed'
+                      ? 'bg-green-100 text-green-700'
+                      : selectedTask.status === 'in-progress'
+                      ? 'bg-blue-100 text-blue-700'
+                      : selectedTask.status === 'overdue'
+                      ? 'bg-red-100 text-red-700'
+                      : 'bg-yellow-100 text-yellow-700'
+                  }`}
                 >
-                  Status
-                </p>
-                <select
-                  value={selectedTask.status}
-                  onChange={(e) =>
-                    handleStatusUpdate(selectedTask.id, e.target.value as Task['status'])
-                  }
-                  className="w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2"
-                  style={{
-                    borderColor: colors.border,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                  }}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="in-progress">In Progress</option>
-                  <option value="completed">Completed</option>
-                  <option value="overdue">Overdue</option>
-                </select>
+                  {selectedTask.status.replace('-', ' ')} →
+                </button>
               </div>
               <div>
-                <p
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: '12px',
-                    color: colors.text.muted,
-                    marginBottom: spacing.xs,
-                  }}
-                >
-                  Priority
-                </p>
+                <p className="text-xs text-gray-500 mb-2">Priority</p>
                 <span
-                  className="inline-block px-3 py-1 rounded-xl text-xs"
-                  style={{
-                    backgroundColor: getPriorityColor(selectedTask.priority) + '20',
-                    color: getPriorityColor(selectedTask.priority),
-                    fontFamily: typography.body.fontFamily,
-                    fontWeight: 500,
-                  }}
+                  className={`inline-block px-3 py-2 rounded-xl text-sm font-medium ${
+                    selectedTask.priority === 'high'
+                      ? 'bg-red-100 text-red-700'
+                      : selectedTask.priority === 'medium'
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : 'bg-green-100 text-green-700'
+                  }`}
                 >
                   {selectedTask.priority}
                 </span>
               </div>
               <div>
-                <p
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: '12px',
-                    color: colors.text.muted,
-                    marginBottom: spacing.xs,
-                  }}
-                >
-                  Due Date
-                </p>
-                <p
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    fontWeight: 500,
-                  }}
-                >
-                  {selectedTask.dueDate}
+                <p className="text-xs text-gray-500 mb-2">Due Date</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {new Date(selectedTask.dueDate).toLocaleDateString()}
                 </p>
               </div>
               <div>
-                <p
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: '12px',
-                    color: colors.text.muted,
-                    marginBottom: spacing.xs,
-                  }}
-                >
-                  Category
-                </p>
-                <p
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    fontWeight: 500,
-                  }}
-                >
-                  {selectedTask.category}
-                </p>
+                <p className="text-xs text-gray-500 mb-2">Category</p>
+                <p className="text-sm font-medium text-gray-900">{selectedTask.category}</p>
               </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-2">Time Block</p>
+                <p className="text-sm font-medium text-gray-900 capitalize">{selectedTask.timeBlock}</p>
+              </div>
+              {selectedTask.estimatedHours && (
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">Estimated Hours</p>
+                  <p className="text-sm font-medium text-gray-900">{selectedTask.estimatedHours} hrs</p>
+                </div>
+              )}
             </div>
 
             {/* Comments Section */}
-            <div className="border-t pt-4" style={{ borderColor: colors.border }}>
-              <h4
-                style={{
-                  fontFamily: typography.sectionHeader.fontFamily,
-                  fontSize: '18px',
-                  fontWeight: 600,
-                  marginBottom: spacing.md,
-                  color: colors.text.primary,
-                }}
-              >
-                Comments
-              </h4>
+            <div className="border-t border-gray-200 pt-4">
+              <h4 className="text-lg font-semibold text-gray-900 mb-4">Comments</h4>
               {selectedTask.comments && selectedTask.comments.length > 0 ? (
                 <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
                   {selectedTask.comments.map((comment, index) => (
                     <div
                       key={index}
-                      className="p-3 rounded-xl"
-                      style={{
-                        backgroundColor: colors.background.subtle,
-                      }}
+                      className="p-3 rounded-xl bg-gray-50 border border-gray-200"
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span
-                          style={{
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            color: colors.text.primary,
-                          }}
-                        >
-                          {comment.author}
-                        </span>
-                        <span
-                          style={{
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: '11px',
-                            color: colors.text.light,
-                          }}
-                        >
-                          {comment.date}
-                        </span>
+                        <span className="text-sm font-semibold text-gray-900">{comment.author}</span>
+                        <span className="text-xs text-gray-400">{comment.date}</span>
                       </div>
-                      <p
-                        style={{
-                          fontFamily: typography.body.fontFamily,
-                          fontSize: typography.body.fontSize,
-                          color: colors.text.muted,
-                        }}
-                      >
-                        {comment.text}
-                      </p>
+                      <p className="text-sm text-gray-600">{comment.text}</p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p
-                  className="mb-4"
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.muted,
-                  }}
-                >
-                  No comments yet.
-                </p>
+                <p className="mb-4 text-sm text-gray-500">No comments yet.</p>
               )}
               <div className="flex gap-2">
                 <input
@@ -389,24 +427,12 @@ export default function EmployeeTasksPage() {
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
                   placeholder="Add a comment..."
-                  className="flex-1 px-4 py-2 rounded-xl border focus:outline-none focus:ring-2"
-                  style={{
-                    borderColor: colors.border,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                  }}
+                  className="flex-1 px-4 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all shadow-sm"
                   onKeyPress={(e) => e.key === 'Enter' && handleAddComment()}
                 />
                 <button
                   onClick={handleAddComment}
-                  className="px-4 py-2 rounded-xl transition-all hover:scale-105"
-                  style={{
-                    backgroundColor: colors.primary.base,
-                    color: '#ffffff',
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    fontWeight: 500,
-                  }}
+                  className="px-4 py-2 rounded-xl bg-amber-600 text-white font-medium transition-all hover:bg-amber-700 hover:scale-105 shadow-md"
                 >
                   Add
                 </button>
@@ -415,6 +441,16 @@ export default function EmployeeTasksPage() {
           </div>
         )}
       </Modal>
+
+      {/* Update Status Modal */}
+      {selectedTask && (
+        <UpdateStatusModal
+          isOpen={isStatusModalOpen}
+          onClose={() => setIsStatusModalOpen(false)}
+          task={selectedTask}
+          onUpdate={handleStatusUpdate}
+        />
+      )}
     </ModuleLayout>
   );
 }

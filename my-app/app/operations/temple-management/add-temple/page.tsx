@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ModuleLayout from '../../../components/layout/ModuleLayout';
-import { colors, spacing, typography, animations } from '../../../design-system';
+// Design system imports removed - using Tailwind CSS instead
+import { getAllTemples, type Temple as StaticTemple } from '../templeData';
 
 interface CustomField {
   id: string;
@@ -33,7 +34,7 @@ interface Temple {
   childTemples?: Array<{ id: string; name: string; location: string; image?: string }>;
 }
 
-export default function AddTemplePage() {
+function AddTempleContent() {
   // #region agent log
   fetch('http://127.0.0.1:7242/ingest/426b5eba-90d2-4027-9f3b-c10ba102fba8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'add-temple/page.tsx:36',message:'Component mount - initial state',data:{showModal:false,editingTempleId:null,templesCount:0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
   // #endregion
@@ -71,13 +72,65 @@ export default function AddTemplePage() {
     type: 'text' as CustomField['type'],
   });
 
+  // Load static data on mount
+  useEffect(() => {
+    try {
+      const staticTemples = getAllTemples();
+      console.log('Loading static temples:', staticTemples.length);
+      // Convert static temple data to the format expected by this component
+      const convertedTemples: Temple[] = staticTemples.map(t => {
+        // Check localStorage for uploaded image first
+        const storageKey = `temple-image-${t.id}`;
+        const uploadedImage = localStorage.getItem(storageKey);
+        const imageToUse = uploadedImage || t.image;
+        
+        return {
+          id: t.id,
+          name: t.name,
+          location: t.location,
+          description: t.description,
+          image: imageToUse,
+          parentTempleId: t.parentTempleId,
+          parentTempleName: t.parentTempleName,
+          status: t.status,
+          openingTime: t.openingTime,
+          closingTime: t.closingTime,
+          contactPhone: t.contactPhone,
+          contactEmail: t.contactEmail,
+          address: t.address,
+          establishedDate: t.establishedDate,
+          deity: t.deity,
+          capacity: t.capacity,
+          childTemples: t.childTemples?.map(childId => {
+            const child = staticTemples.find(t => t.id === childId);
+            // Check localStorage for child temple image
+            const childStorageKey = `temple-image-${childId}`;
+            const childUploadedImage = localStorage.getItem(childStorageKey);
+            const childImageToUse = childUploadedImage || child?.image;
+            
+            return child ? {
+              id: child.id,
+              name: child.name,
+              location: child.location,
+              image: childImageToUse,
+            } : null;
+          }).filter(Boolean) as Array<{ id: string; name: string; location: string; image?: string }> || [],
+        };
+      });
+      console.log('Converted temples:', convertedTemples.length);
+      setTemples(convertedTemples);
+    } catch (error) {
+      console.error('Error loading static temples:', error);
+    }
+  }, []);
+
   // Load temple for editing if templeId is in URL
   useEffect(() => {
     // #region agent log
     const templeId = searchParams?.get('templeId');
     fetch('http://127.0.0.1:7242/ingest/426b5eba-90d2-4027-9f3b-c10ba102fba8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'add-temple/page.tsx:70',message:'Edit useEffect triggered',data:{templeId:templeId||null,templesCount:temples.length,searchParamsNull:!searchParams},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
-    if (templeId) {
+    if (templeId && temples.length > 0) {
       const temple = temples.find(t => t.id === templeId);
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/426b5eba-90d2-4027-9f3b-c10ba102fba8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'add-temple/page.tsx:73',message:'Temple search result',data:{templeId,templeFound:!!temple,templeName:temple?.name||null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
@@ -110,7 +163,18 @@ export default function AddTemplePage() {
   }, [searchParams, temples]);
 
   const parentTemples = temples.filter(t => !t.parentTempleId);
-  const mainTemples = temples.filter(t => !t.parentTempleId);
+  // Show only the first/main temple with its child temples
+  const mainTemple = parentTemples.length > 0 ? parentTemples[0] : null;
+
+  // Pre-select main temple as parent when creating new child temple
+  useEffect(() => {
+    if (mainTemple && !editingTempleId && !formData.parentTempleId) {
+      setFormData(prev => ({
+        ...prev,
+        parentTempleId: mainTemple.id,
+      }));
+    }
+  }, [mainTemple, editingTempleId]);
 
   // Helper function to get child temples for a parent
   const getChildTemples = (parentId: string) => {
@@ -159,23 +223,84 @@ export default function AddTemplePage() {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setFormData(prev => ({
-        ...prev,
-        image: file,
-        imagePreview: URL.createObjectURL(file),
-      }));
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        e.target.value = ''; // Reset file input
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size should be less than 5MB');
+        e.target.value = ''; // Reset file input
+        return;
+      }
+
+      // Convert image to base64 for preview and localStorage
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (reader.result) {
+          const base64String = reader.result as string;
+          setFormData(prev => ({
+            ...prev,
+            image: file,
+            imagePreview: base64String,
+          }));
+          // Reset file input to allow re-uploading the same file
+          e.target.value = '';
+        }
+      };
+      reader.onerror = () => {
+        alert('Error reading image file. Please try again.');
+        e.target.value = ''; // Reset file input
+      };
+      reader.readAsDataURL(file);
     }
   };
 
   const handleTempleImageChange = (templeId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const imageUrl = URL.createObjectURL(file);
-      setTemples(prev => prev.map(temple => 
-        temple.id === templeId 
-          ? { ...temple, image: imageUrl }
-          : temple
-      ));
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        e.target.value = ''; // Reset file input
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size should be less than 5MB');
+        e.target.value = ''; // Reset file input
+        return;
+      }
+
+      // Convert image to base64 for localStorage
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (reader.result) {
+          const base64String = reader.result as string;
+          
+          // Store in localStorage
+          const storageKey = `temple-image-${templeId}`;
+          localStorage.setItem(storageKey, base64String);
+          
+          // Update state with base64 image
+          setTemples(prev => prev.map(temple => 
+            temple.id === templeId 
+              ? { ...temple, image: base64String }
+              : temple
+          ));
+          // Reset file input to allow re-uploading the same file
+          e.target.value = '';
+        }
+      };
+      reader.onerror = () => {
+        alert('Error reading image file. Please try again.');
+        e.target.value = ''; // Reset file input
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -218,6 +343,12 @@ export default function AddTemplePage() {
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/426b5eba-90d2-4027-9f3b-c10ba102fba8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'add-temple/page.tsx:197',message:'Updating temple',data:{editingTempleId,templesCountBefore:temples.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
       // #endregion
+      // Save uploaded image to localStorage if exists
+      if (formData.imagePreview && formData.imagePreview.startsWith('data:image')) {
+        const storageKey = `temple-image-${editingTempleId}`;
+        localStorage.setItem(storageKey, formData.imagePreview);
+      }
+      
       // Update existing temple
       setTemples(prev => prev.map(temple => 
         temple.id === editingTempleId
@@ -259,8 +390,16 @@ export default function AddTemplePage() {
       fetch('http://127.0.0.1:7242/ingest/426b5eba-90d2-4027-9f3b-c10ba102fba8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'add-temple/page.tsx:232',message:'Adding new temple',data:{parentTempleId:formData.parentTempleId||null,templesCountBefore:temples.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
       // #endregion
       // Add new temple to the list (in real app, this would come from API response)
+      const newTempleId = Date.now().toString();
+      
+      // Save uploaded image to localStorage if exists
+      if (formData.imagePreview && formData.imagePreview.startsWith('data:image')) {
+        const storageKey = `temple-image-${newTempleId}`;
+        localStorage.setItem(storageKey, formData.imagePreview);
+      }
+      
       const newTemple: Temple = {
-        id: Date.now().toString(),
+        id: newTempleId,
         name: formData.name,
         location: formData.location,
         description: formData.description || undefined,
@@ -278,7 +417,6 @@ export default function AddTemplePage() {
         establishedDate: formData.establishedDate || undefined,
         deity: formData.deity || undefined,
         capacity: formData.capacity ? parseInt(formData.capacity) : undefined,
-        bookings: 0, // Initialize bookings to 0
         customFields: customFields.reduce((acc, field) => {
           if (field.value.trim()) {
             acc[field.label] = field.value;
@@ -400,14 +538,14 @@ export default function AddTemplePage() {
       action={
         <button
           onClick={() => setShowModal(true)}
-          className={`rounded-2xl ${animations.buttonHover} ${animations.buttonActive}`}
+          className="rounded-2xl hover:opacity-90 active:scale-95 transition-all"
           style={{
-            padding: `${spacing.base} ${spacing.xl}`,
-            backgroundColor: colors.primary.base,
+            padding: '1rem 2rem',
+            backgroundColor: '#67461b',
             color: '#ffffff',
             border: 'none',
-            fontFamily: typography.body.fontFamily,
-            fontSize: typography.body.fontSize,
+            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+            fontSize: '16px',
             fontWeight: 600,
             cursor: 'pointer',
           }}
@@ -416,81 +554,46 @@ export default function AddTemplePage() {
         </button>
       }
     >
-      {temples.length === 0 ? (
+      {!mainTemple ? (
         /* Empty State */
-        <div 
-          className="p-12 rounded-3xl"
-          style={{
-            backgroundColor: colors.background.base,
-            border: `1px solid ${colors.border}`,
-            padding: spacing['3xl'],
-            textAlign: 'center',
-          }}
-        >
-          <div
-            style={{
-              fontSize: '48px',
-              marginBottom: spacing.lg,
-            }}
-          >
+        <div className="bg-white border border-gray-200 rounded-3xl p-12 text-center shadow-sm">
+          <div className="text-5xl mb-6">
             🏛️
           </div>
-          <h2
-            style={{
-              fontFamily: typography.sectionHeader.fontFamily,
-              fontSize: typography.sectionHeader.fontSize,
-              fontWeight: typography.sectionHeader.fontWeight,
-              marginBottom: spacing.base,
-              color: colors.text.primary,
-            }}
-          >
+          <h2 className="font-serif text-xl font-medium mb-4 text-gray-900">
             No temples added yet
           </h2>
-          <p
-            style={{
-              fontFamily: typography.body.fontFamily,
-              fontSize: typography.body.fontSize,
-              color: colors.text.muted,
-              marginBottom: spacing.xl,
-            }}
-          >
+          <p className="font-sans text-base text-gray-600 mb-8">
             Start by adding your first temple to the system using the "Add Temple" button above.
           </p>
         </div>
       ) : (
-        /* Temples List */
+        /* Main Temple with Child Temples */
         <div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: spacing.lg }}>
-            {mainTemples.map((temple, index) => {
-              const childTemples = getChildTemples(temple.id);
+          <div className="grid grid-cols-1 gap-6">
+            {(() => {
+              const childTemples = getChildTemples(mainTemple.id);
               const hasChildren = childTemples.length > 0;
-              const isExpanded = expandedTemples.has(temple.id);
-              const staggerDelay = animations.stagger(index, 0.1);
+              const isExpanded = expandedTemples.has(mainTemple.id);
 
               return (
                 <div
-                  key={temple.id}
-                  className={`rounded-3xl ${animations.cardEnter} ${animations.cardHover} ${animations.transitionAll} overflow-hidden`}
-                  style={{
-                    backgroundColor: colors.background.base,
-                    border: `1px solid ${colors.border}`,
-                    ...staggerDelay,
-                  }}
+                  key={mainTemple.id}
+                  className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all"
                 >
                   {/* Main Temple Content */}
-                  {temple.image ? (
+                  {mainTemple.image ? (
                     <div
                       className="overflow-hidden"
                       style={{
                         width: '100%',
-                        backgroundColor: colors.background.subtle,
                         position: 'relative',
-                        minHeight: '400px',
+                        aspectRatio: '16/9',
+                        maxHeight: '400px',
                         display: 'flex',
                         justifyContent: 'center',
                         alignItems: 'center',
-                        marginBottom: spacing.base,
-                        paddingBottom: spacing.base,
+                        backgroundColor: '#f5f3f0',
                       }}
                       onMouseEnter={(e) => {
                         const overlay = e.currentTarget.querySelector('[data-upload-overlay]') as HTMLElement;
@@ -502,8 +605,8 @@ export default function AddTemplePage() {
                       }}
                     >
                       <img
-                        src={temple.image}
-                        alt={temple.name}
+                        src={mainTemple.image}
+                        alt={mainTemple.name}
                         style={{
                           width: '100%',
                           height: '100%',
@@ -515,28 +618,28 @@ export default function AddTemplePage() {
                       <div
                         style={{
                           position: 'absolute',
-                          top: spacing.base,
-                          left: spacing.base,
-                          padding: `${spacing.xs} ${spacing.sm}`,
+                          top: '1rem',
+                          left: '1rem',
+                          padding: '0.5rem 0.75rem',
                           borderRadius: '8px',
-                          backgroundColor: temple.status === 'active' ? colors.success.base : colors.error.base,
+                          backgroundColor: mainTemple.status === 'active' ? '#a87738' : '#dc2626',
                           color: '#ffffff',
-                          fontFamily: typography.body.fontFamily,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
                           fontSize: '12px',
                           fontWeight: 600,
                           textTransform: 'uppercase',
                           zIndex: 5,
                         }}
                       >
-                        {temple.status}
+                        {mainTemple.status}
                       </div>
                       {/* Upload Icon Overlay */}
                       <div
                         data-upload-overlay
                         style={{
                           position: 'absolute',
-                          top: spacing.base,
-                          right: spacing.base,
+                          top: '1rem',
+                          right: '1rem',
                           opacity: 0,
                           transition: 'opacity 0.2s ease-in-out',
                           cursor: 'pointer',
@@ -544,7 +647,7 @@ export default function AddTemplePage() {
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          document.getElementById(`temple-image-${temple.id}`)?.click();
+                          document.getElementById(`temple-image-${mainTemple.id}`)?.click();
                         }}
                       >
                         <div
@@ -552,7 +655,7 @@ export default function AddTemplePage() {
                           style={{
                             width: '50px',
                             height: '50px',
-                            backgroundColor: colors.primary.base,
+                            backgroundColor: '#67461b',
                             color: '#ffffff',
                           }}
                         >
@@ -575,9 +678,9 @@ export default function AddTemplePage() {
                       {/* Hidden file input for this temple */}
                       <input
                         type="file"
-                        id={`temple-image-${temple.id}`}
+                        id={`temple-image-${mainTemple.id}`}
                         accept="image/*"
-                        onChange={(e) => handleTempleImageChange(temple.id, e)}
+                        onChange={(e) => handleTempleImageChange(mainTemple.id, e)}
                         style={{ display: 'none' }}
                       />
                     </div>
@@ -586,63 +689,63 @@ export default function AddTemplePage() {
                       className="overflow-hidden"
                       style={{
                         width: '100%',
-                        backgroundColor: colors.background.subtle,
                         display: 'flex',
                         justifyContent: 'center',
                         alignItems: 'center',
-                        minHeight: '400px',
-                        border: `2px dashed ${colors.border}`,
+                        aspectRatio: '16/9',
+                        maxHeight: '400px',
+                        border: '2px dashed #e5e5e5',
                       }}
                     >
-                      <div style={{ textAlign: 'center', color: colors.text.muted }}>
-                        <div style={{ fontSize: '48px', marginBottom: spacing.sm }}>📷</div>
-                        <div style={{ fontSize: '14px' }}>No image</div>
+                      <div style={{ textAlign: 'center', color: '#737373' }}>
+                        <div style={{ fontSize: '32px', marginBottom: '0.5rem' }}>📷</div>
+                        <div style={{ fontSize: '12px' }}>No image</div>
                       </div>
                     </div>
                   )}
                   {/* Title Section with Padding */}
-                  <div style={{ padding: spacing.lg, paddingBottom: spacing.base, paddingTop: spacing.lg }}>
+                  <div style={{ paddingTop: '1.5rem', paddingBottom: '1rem', paddingLeft: '1.5rem', paddingRight: '1.5rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
                         <h3
                           style={{
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                            fontSize: '16px',
                             fontWeight: 600,
-                            color: colors.text.primary,
-                            marginBottom: spacing.xs,
+                            color: '#171717',
+                            marginBottom: '0.5rem',
                           }}
                         >
-                          {temple.name}
+                          {mainTemple.name}
                         </h3>
                         <p
                           style={{
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
-                            color: colors.text.muted,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                            fontSize: '16px',
+                            color: '#737373',
                             marginBottom: 0,
                           }}
                         >
-                          {temple.location}
+                          {mainTemple.location}
                         </p>
                       </div>
                     </div>
                   </div>
 
                   {/* Content Section with Padding */}
-                  <div style={{ padding: spacing.lg, paddingTop: 0 }}>
+                  <div style={{ paddingTop: 0, paddingBottom: '1.5rem', paddingLeft: '1.5rem', paddingRight: '1.5rem' }}>
                     {/* Description */}
-                    {temple.description && (
+                    {mainTemple.description && (
                       <p
                         style={{
-                          fontFamily: typography.body.fontFamily,
-                          fontSize: typography.body.fontSize,
-                          color: colors.text.secondary,
-                          marginBottom: spacing.base,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                          fontSize: '16px',
+                          color: '#404040',
+                          marginBottom: '1rem',
                           lineHeight: '1.5',
                         }}
                       >
-                        {temple.description}
+                        {mainTemple.description}
                       </p>
                     )}
 
@@ -651,23 +754,22 @@ export default function AddTemplePage() {
                       style={{
                         display: 'grid',
                         gridTemplateColumns: 'repeat(2, 1fr)',
-                        gap: spacing.base,
-                        marginBottom: spacing.base,
-                        padding: spacing.base,
-                        backgroundColor: colors.background.subtle,
+                        gap: '1rem',
+                        marginBottom: '1rem',
+                        padding: '1rem',
                         borderRadius: '12px',
                       }}
                     >
                     {/* Parent Temple */}
-                    {temple.parentTempleName && (
+                    {mainTemple.parentTempleName && (
                       <div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
                             fontSize: '12px',
                             fontWeight: 600,
-                            color: colors.text.muted,
-                            marginBottom: spacing.xs,
+                            color: '#737373',
+                            marginBottom: '0.5rem',
                             textTransform: 'uppercase',
                           }}
                         >
@@ -675,26 +777,26 @@ export default function AddTemplePage() {
                         </div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
-                            color: colors.text.primary,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                            fontSize: '16px',
+                            color: '#171717',
                           }}
                         >
-                          {temple.parentTempleName}
+                          {mainTemple.parentTempleName}
                         </div>
                       </div>
                     )}
 
                     {/* Deity */}
-                    {temple.deity && (
+                    {mainTemple.deity && (
                       <div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
                             fontSize: '12px',
                             fontWeight: 600,
-                            color: colors.text.muted,
-                            marginBottom: spacing.xs,
+                            color: '#737373',
+                            marginBottom: '0.5rem',
                             textTransform: 'uppercase',
                           }}
                         >
@@ -702,26 +804,26 @@ export default function AddTemplePage() {
                         </div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
-                            color: colors.text.primary,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                            fontSize: '16px',
+                            color: '#171717',
                           }}
                         >
-                          {temple.deity}
+                          {mainTemple.deity}
                         </div>
                       </div>
                     )}
 
                     {/* Opening Time */}
-                    {temple.openingTime && (
+                    {mainTemple.openingTime && (
                       <div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
                             fontSize: '12px',
                             fontWeight: 600,
-                            color: colors.text.muted,
-                            marginBottom: spacing.xs,
+                            color: '#737373',
+                            marginBottom: '0.5rem',
                             textTransform: 'uppercase',
                           }}
                         >
@@ -729,26 +831,26 @@ export default function AddTemplePage() {
                         </div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
-                            color: colors.text.primary,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                            fontSize: '16px',
+                            color: '#171717',
                           }}
                         >
-                          {temple.openingTime}
+                          {mainTemple.openingTime}
                         </div>
                       </div>
                     )}
 
                     {/* Closing Time */}
-                    {temple.closingTime && (
+                    {mainTemple.closingTime && (
                       <div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
                             fontSize: '12px',
                             fontWeight: 600,
-                            color: colors.text.muted,
-                            marginBottom: spacing.xs,
+                            color: '#737373',
+                            marginBottom: '0.5rem',
                             textTransform: 'uppercase',
                           }}
                         >
@@ -756,26 +858,26 @@ export default function AddTemplePage() {
                         </div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
-                            color: colors.text.primary,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                            fontSize: '16px',
+                            color: '#171717',
                           }}
                         >
-                          {temple.closingTime}
+                          {mainTemple.closingTime}
                         </div>
                       </div>
                     )}
 
                     {/* Capacity */}
-                    {temple.capacity && (
+                    {mainTemple.capacity && (
                       <div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
                             fontSize: '12px',
                             fontWeight: 600,
-                            color: colors.text.muted,
-                            marginBottom: spacing.xs,
+                            color: '#737373',
+                            marginBottom: '0.5rem',
                             textTransform: 'uppercase',
                           }}
                         >
@@ -783,37 +885,26 @@ export default function AddTemplePage() {
                         </div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
-                            color: colors.text.primary,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                            fontSize: '16px',
+                            color: '#171717',
                           }}
                         >
-                          {temple.capacity - (temple.bookings || 0)} / {temple.capacity} available
-                          {temple.bookings && temple.bookings > 0 && (
-                            <span
-                              style={{
-                                marginLeft: spacing.sm,
-                                color: colors.text.muted,
-                                fontSize: '14px',
-                              }}
-                            >
-                              ({temple.bookings} booked)
-                            </span>
-                          )}
+                          {mainTemple.capacity} people
                         </div>
                       </div>
                     )}
 
                     {/* Established Date */}
-                    {temple.establishedDate && (
+                    {mainTemple.establishedDate && (
                       <div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
                             fontSize: '12px',
                             fontWeight: 600,
-                            color: colors.text.muted,
-                            marginBottom: spacing.xs,
+                            color: '#737373',
+                            marginBottom: '0.5rem',
                             textTransform: 'uppercase',
                           }}
                         >
@@ -821,26 +912,26 @@ export default function AddTemplePage() {
                         </div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
-                            color: colors.text.primary,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                            fontSize: '16px',
+                            color: '#171717',
                           }}
                         >
-                          {temple.establishedDate}
+                          {mainTemple.establishedDate}
                         </div>
                       </div>
                     )}
 
                     {/* Contact Phone */}
-                    {temple.contactPhone && (
+                    {mainTemple.contactPhone && (
                       <div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
                             fontSize: '12px',
                             fontWeight: 600,
-                            color: colors.text.muted,
-                            marginBottom: spacing.xs,
+                            color: '#737373',
+                            marginBottom: '0.5rem',
                             textTransform: 'uppercase',
                           }}
                         >
@@ -848,26 +939,26 @@ export default function AddTemplePage() {
                         </div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
-                            color: colors.text.primary,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                            fontSize: '16px',
+                            color: '#171717',
                           }}
                         >
-                          {temple.contactPhone}
+                          {mainTemple.contactPhone}
                         </div>
                       </div>
                     )}
 
                     {/* Contact Email */}
-                    {temple.contactEmail && (
+                    {mainTemple.contactEmail && (
                       <div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
                             fontSize: '12px',
                             fontWeight: 600,
-                            color: colors.text.muted,
-                            marginBottom: spacing.xs,
+                            color: '#737373',
+                            marginBottom: '0.5rem',
                             textTransform: 'uppercase',
                           }}
                         >
@@ -875,34 +966,33 @@ export default function AddTemplePage() {
                         </div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
-                            color: colors.text.primary,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                            fontSize: '16px',
+                            color: '#171717',
                           }}
                         >
-                          {temple.contactEmail}
+                          {mainTemple.contactEmail}
                         </div>
                       </div>
                     )}
                   </div>
 
                     {/* Address */}
-                    {temple.address && (
+                    {mainTemple.address && (
                       <div
                         style={{
-                          marginBottom: spacing.base,
-                          padding: spacing.base,
-                          backgroundColor: colors.background.subtle,
+                          marginBottom: '1rem',
+                          padding: '1rem',
                           borderRadius: '12px',
                         }}
                       >
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
                           fontSize: '12px',
                           fontWeight: 600,
-                          color: colors.text.muted,
-                          marginBottom: spacing.xs,
+                          color: '#737373',
+                          marginBottom: '0.5rem',
                           textTransform: 'uppercase',
                         }}
                       >
@@ -910,33 +1000,32 @@ export default function AddTemplePage() {
                       </div>
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
-                          fontSize: typography.body.fontSize,
-                          color: colors.text.primary,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                          fontSize: '16px',
+                          color: '#171717',
                         }}
                       >
-                        {temple.address}
+                        {mainTemple.address}
                       </div>
                     </div>
-                  )}
+                    )}
 
                     {/* Custom Fields */}
-                    {temple.customFields && Object.keys(temple.customFields).length > 0 && (
+                    {mainTemple.customFields && Object.keys(mainTemple.customFields).length > 0 && (
                       <div
                         style={{
-                          marginBottom: spacing.base,
-                          padding: spacing.base,
-                          backgroundColor: colors.background.subtle,
+                          marginBottom: '1rem',
+                          padding: '1rem',
                           borderRadius: '12px',
                         }}
                       >
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
                           fontSize: '12px',
                           fontWeight: 600,
-                          color: colors.text.muted,
-                          marginBottom: spacing.sm,
+                          color: '#737373',
+                          marginBottom: '0.75rem',
                           textTransform: 'uppercase',
                         }}
                       >
@@ -946,27 +1035,27 @@ export default function AddTemplePage() {
                         style={{
                           display: 'grid',
                           gridTemplateColumns: 'repeat(2, 1fr)',
-                          gap: spacing.sm,
+                          gap: '0.75rem',
                         }}
                       >
-                        {Object.entries(temple.customFields).map(([key, value]) => (
+                        {Object.entries(mainTemple.customFields).map(([key, value]) => (
                           <div key={key}>
                             <div
                               style={{
-                                fontFamily: typography.body.fontFamily,
+                                fontFamily: 'var(--font-inter), system-ui, sans-serif',
                                 fontSize: '12px',
                                 fontWeight: 600,
-                                color: colors.text.muted,
-                                marginBottom: spacing.xs,
+                                color: '#737373',
+                                marginBottom: '0.5rem',
                               }}
                             >
                               {key}
                             </div>
                             <div
                               style={{
-                                fontFamily: typography.body.fontFamily,
-                                fontSize: typography.body.fontSize,
-                                color: colors.text.primary,
+                                fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                                fontSize: '16px',
+                                color: '#171717',
                               }}
                             >
                               {value}
@@ -980,24 +1069,24 @@ export default function AddTemplePage() {
 
                   {/* Child Temples Section */}
                   {hasChildren && (
-                    <div style={{ marginTop: spacing.base, padding: spacing.lg, paddingTop: 0 }}>
+                    <div style={{ marginTop: '1rem', paddingTop: 0, paddingBottom: '1.5rem', paddingLeft: '1.5rem', paddingRight: '1.5rem' }}>
                       <button
                         type="button"
-                        onClick={() => toggleExpand(temple.id)}
+                        onClick={() => toggleExpand(mainTemple.id)}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: spacing.xs,
+                          gap: '0.5rem',
                           background: 'none',
                           border: 'none',
                           padding: 0,
                           cursor: 'pointer',
-                          fontFamily: typography.body.fontFamily,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
                           fontSize: '12px',
                           fontWeight: 600,
-                          color: colors.text.muted,
+                          color: '#737373',
                           textTransform: 'uppercase',
-                          marginBottom: spacing.xs,
+                          marginBottom: '1rem',
                         }}
                       >
                         <svg
@@ -1023,8 +1112,11 @@ export default function AddTemplePage() {
                           overflow: 'hidden',
                           transition: 'max-height 0.3s ease',
                           display: isExpanded ? 'grid' : 'none',
-                          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-                          gap: spacing.base,
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                          gap: '1.5rem',
+                          width: '100%',
+                          gridAutoRows: 'min-content',
+                          paddingBottom: '1rem',
                         }}
                       >
                         {childTemples.map((child) => {
@@ -1032,22 +1124,26 @@ export default function AddTemplePage() {
                           return (
                             <div
                               key={child.id}
-                              className={`rounded-2xl ${animations.cardEnter} ${animations.cardHover} ${animations.transitionAll} overflow-hidden`}
+                              className="rounded-2xl overflow-hidden transition-all hover:shadow-md"
                               style={{
-                                backgroundColor: colors.background.subtle,
-                                border: `1px solid ${colors.border}`,
+                                border: '1px solid #e5e5e5',
                                 cursor: 'pointer',
+                                width: '100%',
+                                minWidth: 0,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                height: '100%',
                               }}
                               onClick={() => {
                                 setSelectedChildTemple(childTemple);
                                 setShowChildDetailModal(true);
                               }}
                               onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = colors.primary.base;
+                                e.currentTarget.style.borderColor = '#c2410c';
                                 e.currentTarget.style.boxShadow = `0 4px 12px rgba(0, 0, 0, 0.08)`;
                               }}
                               onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = colors.border;
+                                e.currentTarget.style.borderColor = '#e5e5e5';
                                 e.currentTarget.style.boxShadow = 'none';
                               }}
                             >
@@ -1057,8 +1153,8 @@ export default function AddTemplePage() {
                                   className="overflow-hidden"
                                   style={{
                                     width: '100%',
-                                    height: '150px',
-                                    backgroundColor: colors.background.light,
+                                    aspectRatio: '16/9',
+                                    maxHeight: '160px',
                                     position: 'relative',
                                     display: 'flex',
                                     justifyContent: 'center',
@@ -1091,13 +1187,13 @@ export default function AddTemplePage() {
                                   <div
                                     style={{
                                       position: 'absolute',
-                                      top: spacing.xs,
-                                      left: spacing.xs,
-                                      padding: `${spacing.xs} ${spacing.sm}`,
+                                      top: '0.5rem',
+                                      left: '0.5rem',
+                                      padding: '0.5rem 0.75rem',
                                       borderRadius: '6px',
-                                      backgroundColor: childTemple.status === 'active' ? colors.success.base : colors.error.base,
+                                      backgroundColor: childTemple.status === 'active' ? '#a87738' : '#dc2626',
                                       color: '#ffffff',
-                                      fontFamily: typography.body.fontFamily,
+                                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
                                       fontSize: '10px',
                                       fontWeight: 600,
                                       textTransform: 'uppercase',
@@ -1111,8 +1207,8 @@ export default function AddTemplePage() {
                                     data-upload-overlay
                                     style={{
                                       position: 'absolute',
-                                      top: spacing.xs,
-                                      right: spacing.xs,
+                                      top: '0.5rem',
+                                      right: '0.5rem',
                                       opacity: 0,
                                       transition: 'opacity 0.2s ease-in-out',
                                       cursor: 'pointer',
@@ -1124,7 +1220,7 @@ export default function AddTemplePage() {
                                       style={{
                                         width: '32px',
                                         height: '32px',
-                                        backgroundColor: colors.primary.base,
+                                        backgroundColor: '#67461b',
                                         color: '#ffffff',
                                       }}
                                     >
@@ -1161,12 +1257,12 @@ export default function AddTemplePage() {
                                   className="overflow-hidden"
                                   style={{
                                     width: '100%',
-                                    height: '150px',
-                                    backgroundColor: colors.background.light,
+                                    aspectRatio: '16/9',
+                                    maxHeight: '160px',
                                     display: 'flex',
                                     justifyContent: 'center',
                                     alignItems: 'center',
-                                    border: `2px dashed ${colors.border}`,
+                                    border: '2px dashed #e5e5e5',
                                     position: 'relative',
                                   }}
                                   onClick={(e) => {
@@ -1174,8 +1270,8 @@ export default function AddTemplePage() {
                                     document.getElementById(`child-image-thumb-${child.id}`)?.click();
                                   }}
                                 >
-                                  <div style={{ textAlign: 'center', color: colors.text.muted }}>
-                                    <div style={{ fontSize: '24px', marginBottom: spacing.xs }}>📷</div>
+                                  <div style={{ textAlign: 'center', color: '#737373' }}>
+                                    <div style={{ fontSize: '20px', marginBottom: '0.5rem' }}>📷</div>
                                     <div style={{ fontSize: '10px' }}>No image</div>
                                   </div>
                                   {/* Hidden file input for thumbnail upload */}
@@ -1192,23 +1288,40 @@ export default function AddTemplePage() {
                                 </div>
                               )}
                               {/* Child Temple Minimal Info */}
-                              <div style={{ padding: spacing.base }}>
-                                <h4
-                                  style={{
-                                    fontFamily: typography.body.fontFamily,
-                                    fontSize: '14px',
-                                    fontWeight: 600,
-                                    color: colors.text.primary,
-                                    marginBottom: spacing.xs,
-                                  }}
-                                >
-                                  {childTemple.name}
-                                </h4>
+                              <div style={{ paddingTop: '1.5rem', paddingBottom: '1.5rem', paddingLeft: '1.5rem', paddingRight: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                {childTemple.deity ? (
+                                  <h4
+                                    style={{
+                                      fontFamily: 'var(--font-noto-serif), serif',
+                                      fontSize: '20px',
+                                      fontWeight: 700,
+                                      color: '#67461b',
+                                      marginBottom: '0.5rem',
+                                      lineHeight: 1.3,
+                                    }}
+                                  >
+                                    {childTemple.deity}
+                                  </h4>
+                                ) : (
+                                  <h4
+                                    style={{
+                                      fontFamily: 'var(--font-noto-serif), serif',
+                                      fontSize: '17px',
+                                      fontWeight: 600,
+                                      color: '#171717',
+                                      marginBottom: '0.5rem',
+                                      lineHeight: 1.3,
+                                    }}
+                                  >
+                                    {childTemple.name}
+                                  </h4>
+                                )}
                                 <p
                                   style={{
-                                    fontFamily: typography.body.fontFamily,
-                                    fontSize: '12px',
-                                    color: colors.text.muted,
+                                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                                    fontSize: '13px',
+                                    color: '#737373',
+                                    marginTop: 'auto',
                                     marginBottom: 0,
                                   }}
                                 >
@@ -1226,26 +1339,26 @@ export default function AddTemplePage() {
                     <div
                       style={{
                         display: 'flex',
-                        gap: spacing.base,
-                        marginTop: spacing.lg,
-                        paddingTop: spacing.base,
-                        paddingBottom: spacing.lg,
-                        paddingLeft: spacing.lg,
-                        paddingRight: spacing.lg,
-                        borderTop: `1px solid ${colors.border}`,
+                        gap: '1rem',
+                        marginTop: '1.5rem',
+                        paddingTop: '1rem',
+                        paddingBottom: '1.5rem',
+                        paddingLeft: '1.5rem',
+                        paddingRight: '1.5rem',
+                        borderTop: '1px solid #e5e5e5',
                       }}
                     >
                     <button
-                      onClick={() => router.push(`/operations/temple-management/temple-details?templeId=${temple.id}`)}
-                      className={`rounded-xl ${animations.buttonHover} ${animations.buttonActive}`}
+                      onClick={() => router.push(`/operations/temple-management/temple-details?templeId=${mainTemple.id}`)}
+                      className="rounded-xl hover:opacity-90 active:scale-95 transition-all"
                       style={{
                         flex: 1,
-                        padding: spacing.base,
-                        backgroundColor: colors.primary.base,
+                        padding: '1rem',
+                        backgroundColor: '#67461b',
                         color: '#ffffff',
                         border: 'none',
-                        fontFamily: typography.body.fontFamily,
-                        fontSize: typography.body.fontSize,
+                        fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                        fontSize: '16px',
                         fontWeight: 500,
                         cursor: 'pointer',
                       }}
@@ -1253,24 +1366,24 @@ export default function AddTemplePage() {
                       View Details
                     </button>
                     <button
-                      onClick={() => router.push(`/operations/temple-management/add-temple?templeId=${temple.id}`)}
-                      className={`rounded-xl ${animations.buttonHover} ${animations.buttonActive}`}
+                      onClick={() => router.push(`/operations/temple-management/add-temple?templeId=${mainTemple.id}`)}
+                      className="rounded-xl hover:opacity-90 active:scale-95 transition-all"
                       style={{
                         flex: 1,
-                        padding: spacing.base,
-                        backgroundColor: colors.background.subtle,
-                        color: colors.primary.base,
-                        border: `1px solid ${colors.primary.base}`,
-                        fontFamily: typography.body.fontFamily,
-                        fontSize: typography.body.fontSize,
+                        padding: '1rem',
+                        backgroundColor: '#fafafa',
+                        color: '#c2410c',
+                        border: '1px solid #c2410c',
+                        fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                        fontSize: '16px',
                         fontWeight: 500,
                         cursor: 'pointer',
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = colors.background.light;
+                        e.currentTarget.style.opacity = '0.8';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = colors.background.subtle;
+                        e.currentTarget.style.opacity = '1';
                       }}
                     >
                       Edit
@@ -1278,7 +1391,7 @@ export default function AddTemplePage() {
                   </div>
                 </div>
               );
-            })}
+            })()}
           </div>
         </div>
       )}
@@ -1286,55 +1399,20 @@ export default function AddTemplePage() {
       {/* Add Temple Modal */}
       {showModal && (
         <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: spacing.lg,
-          }}
+          className="fixed inset-0 bg-black bg-opacity-50 z-[1000] flex items-center justify-center p-6"
           onClick={handleCloseModal}
         >
           <div
-            className="rounded-3xl overflow-y-auto"
-            style={{
-              backgroundColor: colors.background.base,
-              padding: spacing.xl,
-              maxWidth: '600px',
-              width: '100%',
-              maxHeight: '90vh',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-            }}
+            className="bg-white rounded-3xl overflow-y-auto p-6 max-w-2xl w-full max-h-[90vh] shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg }}>
-          <h2
-            style={{
-              fontFamily: typography.sectionHeader.fontFamily,
-              fontSize: typography.sectionHeader.fontSize,
-              fontWeight: typography.sectionHeader.fontWeight,
-              color: colors.text.primary,
-            }}
-          >
+            <div className="flex justify-between items-center mb-6">
+          <h2 className="font-serif text-xl font-medium text-gray-900">
             Add Temple
           </h2>
               <button
                 onClick={handleCloseModal}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '24px',
-                  color: colors.text.muted,
-                  cursor: 'pointer',
-                  padding: spacing.xs,
-                  lineHeight: 1,
-                }}
+                className="bg-transparent border-none text-2xl text-gray-600 cursor-pointer p-1 leading-none hover:text-gray-900 transition-colors"
               >
                 ×
               </button>
@@ -1342,25 +1420,25 @@ export default function AddTemplePage() {
 
             <form onSubmit={handleSubmit}>
               {/* Temple Image - First Priority */}
-              <div style={{ marginBottom: spacing.xl }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
+              <div style={{ marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
                   <label
                     htmlFor="image"
                     style={{
                       display: 'block',
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
                       fontWeight: 600,
-                      color: colors.text.primary,
+                      color: '#171717',
                     }}
                   >
                     {formData.parentTempleId ? 'Child Temple Image' : 'Temple Image'}
                   </label>
                   <span
                     style={{
-                      fontFamily: typography.body.fontFamily,
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
                       fontSize: '12px',
-                      color: colors.text.muted,
+                      color: '#737373',
                       fontStyle: 'italic',
                     }}
                   >
@@ -1370,14 +1448,14 @@ export default function AddTemplePage() {
                 {formData.imagePreview ? (
                   <div
                     style={{
-                      marginBottom: spacing.base,
+                      marginBottom: '1rem',
                       position: 'relative',
                       width: '100%',
                       minHeight: '400px',
                       display: 'flex',
                       justifyContent: 'center',
                       alignItems: 'center',
-                      backgroundColor: colors.background.subtle,
+                      backgroundColor: '#fafafa',
                       borderRadius: '16px',
                       overflow: 'hidden',
                     }}
@@ -1393,7 +1471,7 @@ export default function AddTemplePage() {
                     <img
                       src={formData.imagePreview}
                       alt="Preview"
-                      className={`rounded-2xl ${animations.scaleIn}`}
+                      className="rounded-2xl transition-all"
                       style={{
                         width: '100%',
                         height: '100%',
@@ -1406,8 +1484,8 @@ export default function AddTemplePage() {
                       data-upload-overlay
                       style={{
                         position: 'absolute',
-                        top: spacing.base,
-                        right: spacing.base,
+                        top: '1rem',
+                        right: '1rem',
                         opacity: 0,
                         transition: 'opacity 0.2s ease-in-out',
                         cursor: 'pointer',
@@ -1422,7 +1500,7 @@ export default function AddTemplePage() {
                         style={{
                           width: '50px',
                           height: '50px',
-                          backgroundColor: colors.primary.base,
+                          backgroundColor: '#67461b',
                           color: '#ffffff',
                         }}
                       >
@@ -1447,15 +1525,15 @@ export default function AddTemplePage() {
                       onClick={() => {
                         setFormData(prev => ({ ...prev, image: null, imagePreview: '' }));
                       }}
-                      className={`rounded-xl ${animations.buttonHover} ${animations.buttonActive}`}
+                      className="rounded-xl hover:opacity-90 active:scale-95 transition-all"
                       style={{
-                        marginTop: spacing.sm,
-                        padding: `${spacing.xs} ${spacing.base}`,
-                        backgroundColor: colors.background.subtle,
-                        color: colors.text.primary,
-                        border: `1px solid ${colors.border}`,
-                        fontFamily: typography.body.fontFamily,
-                        fontSize: typography.body.fontSize,
+                        marginTop: '0.75rem',
+                        padding: '0.5rem 1rem',
+                        backgroundColor: '#fafafa',
+                        color: '#171717',
+                        border: '1px solid #e5e5e5',
+                        fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                        fontSize: '16px',
                         cursor: 'pointer',
                       }}
                     >
@@ -1464,22 +1542,20 @@ export default function AddTemplePage() {
                   </div>
                 ) : (
                   <div
-                    className={`rounded-2xl transition-all text-center cursor-pointer ${animations.hoverLift} ${animations.hoverGlow}`}
+                    className="rounded-2xl transition-all text-center cursor-pointer hover:-translate-y-1 hover:shadow-lg"
                     style={{
-                      border: `2px dashed ${colors.primary.base}`,
-                      padding: spacing.xl,
-                      backgroundColor: colors.background.subtle,
+                      border: '2px dashed #c2410c',
+                      padding: '2rem',
+                      backgroundColor: '#fafafa',
                       borderWidth: '3px',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = colors.primary.base;
-                      e.currentTarget.style.backgroundColor = colors.background.light;
+                      e.currentTarget.style.borderColor = '#c2410c';
                       e.currentTarget.style.borderStyle = 'solid';
                       e.currentTarget.style.boxShadow = `0 8px 24px rgba(0, 0, 0, 0.12)`;
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = colors.primary.base;
-                      e.currentTarget.style.backgroundColor = colors.background.subtle;
+                      e.currentTarget.style.borderColor = '#c2410c';
                       e.currentTarget.style.borderStyle = 'dashed';
                       e.currentTarget.style.boxShadow = 'none';
                     }}
@@ -1491,23 +1567,23 @@ export default function AddTemplePage() {
                         display: 'block',
                       }}
                     >
-                      <div style={{ fontSize: '64px', marginBottom: spacing.base }}>📷</div>
+                      <div style={{ fontSize: '64px', marginBottom: '1rem' }}>📷</div>
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
-                          fontSize: typography.body.fontSize,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                          fontSize: '16px',
                           fontWeight: 600,
-                          color: colors.primary.base,
-                          marginBottom: spacing.xs,
+                          color: '#c2410c',
+                          marginBottom: '0.5rem',
                         }}
                       >
                         Click to upload {formData.parentTempleId ? 'child temple' : 'temple'} image
                       </div>
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
                           fontSize: '12px',
-                          color: colors.text.muted,
+                          color: '#737373',
                         }}
                       >
                         PNG, JPG, WEBP up to 5MB
@@ -1525,16 +1601,16 @@ export default function AddTemplePage() {
               </div>
 
               {/* Temple Name */}
-              <div style={{ marginBottom: spacing.lg }}>
+              <div style={{ marginBottom: '1.5rem' }}>
                 <label
                   htmlFor="name"
                   style={{
                     display: 'block',
-                    marginBottom: spacing.sm,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
+                    marginBottom: '0.75rem',
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
                     fontWeight: 600,
-                    color: colors.text.primary,
+                    color: '#171717',
                   }}
                 >
                   Temple Name <span style={{ color: '#dc2626' }}>*</span>
@@ -1547,21 +1623,21 @@ export default function AddTemplePage() {
                   className="rounded-2xl"
                   style={{
                     width: '100%',
-                    padding: spacing.base,
-                    border: `1px solid ${errors.name ? '#dc2626' : colors.border}`,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    backgroundColor: colors.background.base,
+                    padding: '1rem',
+                    border: `1px solid ${errors.name ? '#dc2626' : '#e5e5e5'}`,
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
+                    color: '#171717',
+                    backgroundColor: '#ffffff',
                   }}
                 />
                 {errors.name && (
                   <span
                     style={{
                       display: 'block',
-                      marginTop: spacing.xs,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
+                      marginTop: '0.5rem',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
                       color: '#dc2626',
                     }}
                   >
@@ -1571,16 +1647,16 @@ export default function AddTemplePage() {
               </div>
 
               {/* Location */}
-              <div style={{ marginBottom: spacing.lg }}>
+              <div style={{ marginBottom: '1.5rem' }}>
                 <label
                   htmlFor="location"
                   style={{
                     display: 'block',
-                    marginBottom: spacing.sm,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
+                    marginBottom: '0.75rem',
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
                     fontWeight: 600,
-                    color: colors.text.primary,
+                    color: '#171717',
                   }}
                 >
                   Location <span style={{ color: '#dc2626' }}>*</span>
@@ -1593,21 +1669,21 @@ export default function AddTemplePage() {
                   className="rounded-2xl"
                   style={{
                     width: '100%',
-                    padding: spacing.base,
-                    border: `1px solid ${errors.location ? '#dc2626' : colors.border}`,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    backgroundColor: colors.background.base,
+                    padding: '1rem',
+                    border: `1px solid ${errors.location ? '#dc2626' : '#e5e5e5'}`,
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
+                    color: '#171717',
+                    backgroundColor: '#ffffff',
                   }}
                 />
                 {errors.location && (
                   <span
                     style={{
                       display: 'block',
-                      marginTop: spacing.xs,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
+                      marginTop: '0.5rem',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
                       color: '#dc2626',
                     }}
                   >
@@ -1617,16 +1693,16 @@ export default function AddTemplePage() {
               </div>
 
               {/* Description */}
-              <div style={{ marginBottom: spacing.lg }}>
+              <div style={{ marginBottom: '1.5rem' }}>
                 <label
                   htmlFor="description"
                   style={{
                     display: 'block',
-                    marginBottom: spacing.sm,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
+                    marginBottom: '0.75rem',
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
                     fontWeight: 600,
-                    color: colors.text.primary,
+                    color: '#171717',
                   }}
                 >
                   Description
@@ -1639,28 +1715,28 @@ export default function AddTemplePage() {
                   className="rounded-2xl"
                   style={{
                     width: '100%',
-                    padding: spacing.base,
-                    border: `1px solid ${colors.border}`,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    backgroundColor: colors.background.base,
+                    padding: '1rem',
+                    border: '1px solid #e5e5e5',
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
+                    color: '#171717',
+                    backgroundColor: '#ffffff',
                     resize: 'vertical',
                   }}
                 />
               </div>
 
               {/* Address */}
-              <div style={{ marginBottom: spacing.lg }}>
+              <div style={{ marginBottom: '1.5rem' }}>
                 <label
                   htmlFor="address"
                   style={{
                     display: 'block',
-                    marginBottom: spacing.sm,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
+                    marginBottom: '0.75rem',
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
                     fontWeight: 600,
-                    color: colors.text.primary,
+                    color: '#171717',
                   }}
                 >
                   Address
@@ -1674,29 +1750,29 @@ export default function AddTemplePage() {
                   className="rounded-2xl"
                   style={{
                     width: '100%',
-                    padding: spacing.base,
-                    border: `1px solid ${colors.border}`,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    backgroundColor: colors.background.base,
+                    padding: '1rem',
+                    border: '1px solid #e5e5e5',
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
+                    color: '#171717',
+                    backgroundColor: '#ffffff',
                     resize: 'vertical',
                   }}
                 />
               </div>
 
               {/* Opening Time & Closing Time */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.base, marginBottom: spacing.lg }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div>
                   <label
                     htmlFor="openingTime"
                     style={{
                       display: 'block',
-                      marginBottom: spacing.sm,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
+                      marginBottom: '0.75rem',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
                       fontWeight: 600,
-                      color: colors.text.primary,
+                      color: '#171717',
                     }}
                   >
                     Opening Time
@@ -1709,12 +1785,12 @@ export default function AddTemplePage() {
                     className="rounded-2xl"
                     style={{
                       width: '100%',
-                      padding: spacing.base,
-                      border: `1px solid ${colors.border}`,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
-                      color: colors.text.primary,
-                      backgroundColor: colors.background.base,
+                      padding: '1rem',
+                      border: '1px solid #e5e5e5',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
+                      color: '#171717',
+                      backgroundColor: '#ffffff',
                     }}
                   />
                 </div>
@@ -1723,11 +1799,11 @@ export default function AddTemplePage() {
                     htmlFor="closingTime"
                     style={{
                       display: 'block',
-                      marginBottom: spacing.sm,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
+                      marginBottom: '0.75rem',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
                       fontWeight: 600,
-                      color: colors.text.primary,
+                      color: '#171717',
                     }}
                   >
                     Closing Time
@@ -1740,29 +1816,29 @@ export default function AddTemplePage() {
                     className="rounded-2xl"
                     style={{
                       width: '100%',
-                      padding: spacing.base,
-                      border: `1px solid ${colors.border}`,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
-                      color: colors.text.primary,
-                      backgroundColor: colors.background.base,
+                      padding: '1rem',
+                      border: '1px solid #e5e5e5',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
+                      color: '#171717',
+                      backgroundColor: '#ffffff',
                     }}
                   />
                 </div>
               </div>
 
               {/* Contact Information */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.base, marginBottom: spacing.lg }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div>
                   <label
                     htmlFor="contactPhone"
                     style={{
                       display: 'block',
-                      marginBottom: spacing.sm,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
+                      marginBottom: '0.75rem',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
                       fontWeight: 600,
-                      color: colors.text.primary,
+                      color: '#171717',
                     }}
                   >
                     Contact Phone
@@ -1776,12 +1852,12 @@ export default function AddTemplePage() {
                     className="rounded-2xl"
                     style={{
                       width: '100%',
-                      padding: spacing.base,
-                      border: `1px solid ${colors.border}`,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
-                      color: colors.text.primary,
-                      backgroundColor: colors.background.base,
+                      padding: '1rem',
+                      border: '1px solid #e5e5e5',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
+                      color: '#171717',
+                      backgroundColor: '#ffffff',
                     }}
                   />
                 </div>
@@ -1790,11 +1866,11 @@ export default function AddTemplePage() {
                     htmlFor="contactEmail"
                     style={{
                       display: 'block',
-                      marginBottom: spacing.sm,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
+                      marginBottom: '0.75rem',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
                       fontWeight: 600,
-                      color: colors.text.primary,
+                      color: '#171717',
                     }}
                   >
                     Contact Email
@@ -1808,29 +1884,29 @@ export default function AddTemplePage() {
                     className="rounded-2xl"
                     style={{
                       width: '100%',
-                      padding: spacing.base,
-                      border: `1px solid ${colors.border}`,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
-                      color: colors.text.primary,
-                      backgroundColor: colors.background.base,
+                      padding: '1rem',
+                      border: '1px solid #e5e5e5',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
+                      color: '#171717',
+                      backgroundColor: '#ffffff',
                     }}
                   />
                 </div>
               </div>
 
               {/* Deity & Established Date */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.base, marginBottom: spacing.lg }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div>
                   <label
                     htmlFor="deity"
                     style={{
                       display: 'block',
-                      marginBottom: spacing.sm,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
+                      marginBottom: '0.75rem',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
                       fontWeight: 600,
-                      color: colors.text.primary,
+                      color: '#171717',
                     }}
                   >
                     Main Deity
@@ -1844,12 +1920,12 @@ export default function AddTemplePage() {
                     className="rounded-2xl"
                     style={{
                       width: '100%',
-                      padding: spacing.base,
-                      border: `1px solid ${colors.border}`,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
-                      color: colors.text.primary,
-                      backgroundColor: colors.background.base,
+                      padding: '1rem',
+                      border: '1px solid #e5e5e5',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
+                      color: '#171717',
+                      backgroundColor: '#ffffff',
                     }}
                   />
                 </div>
@@ -1858,11 +1934,11 @@ export default function AddTemplePage() {
                     htmlFor="establishedDate"
                     style={{
                       display: 'block',
-                      marginBottom: spacing.sm,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
+                      marginBottom: '0.75rem',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
                       fontWeight: 600,
-                      color: colors.text.primary,
+                      color: '#171717',
                     }}
                   >
                     Established Date
@@ -1875,28 +1951,28 @@ export default function AddTemplePage() {
                     className="rounded-2xl"
                     style={{
                       width: '100%',
-                      padding: spacing.base,
-                      border: `1px solid ${colors.border}`,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
-                      color: colors.text.primary,
-                      backgroundColor: colors.background.base,
+                      padding: '1rem',
+                      border: '1px solid #e5e5e5',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
+                      color: '#171717',
+                      backgroundColor: '#ffffff',
                     }}
                   />
                 </div>
               </div>
 
               {/* Capacity */}
-              <div style={{ marginBottom: spacing.lg }}>
+              <div style={{ marginBottom: '1.5rem' }}>
                 <label
                   htmlFor="capacity"
                   style={{
                     display: 'block',
-                    marginBottom: spacing.sm,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
+                    marginBottom: '0.75rem',
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
                     fontWeight: 600,
-                    color: colors.text.primary,
+                    color: '#171717',
                   }}
                 >
                   Capacity (Number of devotees)
@@ -1911,27 +1987,27 @@ export default function AddTemplePage() {
                   className="rounded-2xl"
                   style={{
                     width: '100%',
-                    padding: spacing.base,
-                    border: `1px solid ${colors.border}`,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    backgroundColor: colors.background.base,
+                    padding: '1rem',
+                    border: '1px solid #e5e5e5',
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
+                    color: '#171717',
+                    backgroundColor: '#ffffff',
                   }}
                 />
               </div>
 
               {/* Parent Temple */}
-              <div style={{ marginBottom: spacing.lg }}>
+              <div style={{ marginBottom: '1.5rem' }}>
                 <label
                   htmlFor="parentTempleId"
                   style={{
                     display: 'block',
-                    marginBottom: spacing.sm,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
+                    marginBottom: '0.75rem',
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
                     fontWeight: 600,
-                    color: colors.text.primary,
+                    color: '#171717',
                   }}
                 >
                   Parent Temple (Optional)
@@ -1948,41 +2024,54 @@ export default function AddTemplePage() {
                   className="rounded-2xl"
                   style={{
                     width: '100%',
-                    padding: spacing.base,
-                    border: `1px solid ${colors.border}`,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    backgroundColor: colors.background.base,
+                    padding: '1rem',
+                    border: '1px solid #e5e5e5',
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
+                    color: '#171717',
+                    backgroundColor: '#ffffff',
                   }}
                 >
                   <option value="">None (Parent Temple)</option>
                   {parentTemples.map((temple) => (
                     <option key={temple.id} value={temple.id}>
-                      {temple.name}
+                      {temple.name} {temple.id === mainTemple?.id ? '(Main Temple)' : ''}
                     </option>
                   ))}
                 </select>
+                {mainTemple && (
+                  <p
+                    style={{
+                      marginTop: '0.5rem',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '14px',
+                      color: '#67461b',
+                      fontStyle: 'italic',
+                    }}
+                  >
+                    💡 Tip: New temples are automatically set as child temples of the main temple.
+                  </p>
+                )}
                 <p
                   style={{
-                    marginTop: spacing.xs,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.muted,
+                    marginTop: '0.5rem',
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
+                    color: '#737373',
                   }}
                 >
                   Leave empty if this is a parent temple, or select a parent temple if this is a child temple.
                 </p>
                 {!formData.parentTempleId && parentTemples.length > 0 && (
-                  <div style={{ marginTop: spacing.base }}>
+                  <div style={{ marginTop: '1rem' }}>
                     <label
                       style={{
                         display: 'block',
-                        marginBottom: spacing.sm,
-                        fontFamily: typography.body.fontFamily,
-                        fontSize: typography.body.fontSize,
+                        marginBottom: '0.75rem',
+                        fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                        fontSize: '16px',
                         fontWeight: 600,
-                        color: colors.text.primary,
+                        color: '#171717',
                       }}
                     >
                       Or add as child temple to:
@@ -1996,12 +2085,12 @@ export default function AddTemplePage() {
                       className="rounded-2xl"
                       style={{
                         width: '100%',
-                        padding: spacing.base,
-                        border: `1px solid ${colors.border}`,
-                        fontFamily: typography.body.fontFamily,
-                        fontSize: typography.body.fontSize,
-                        color: colors.text.primary,
-                        backgroundColor: colors.background.base,
+                        padding: '1rem',
+                        border: '1px solid #e5e5e5',
+                        fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                        fontSize: '16px',
+                        color: '#171717',
+                        backgroundColor: '#ffffff',
                       }}
                       defaultValue=""
                     >
@@ -2017,28 +2106,28 @@ export default function AddTemplePage() {
               </div>
 
               {/* Status */}
-              <div style={{ marginBottom: spacing.lg }}>
+              <div style={{ marginBottom: '1.5rem' }}>
                 <label
                   style={{
                     display: 'block',
-                    marginBottom: spacing.sm,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
+                    marginBottom: '0.75rem',
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
                     fontWeight: 600,
-                    color: colors.text.primary,
+                    color: '#171717',
                   }}
                 >
                   Status
                 </label>
-                <div style={{ display: 'flex', gap: spacing.base }}>
+                <div style={{ display: 'flex', gap: '1rem' }}>
                   <label
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: spacing.sm,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
-                      color: colors.text.primary,
+                      gap: '0.75rem',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
+                      color: '#171717',
                       cursor: 'pointer',
                     }}
                   >
@@ -2056,10 +2145,10 @@ export default function AddTemplePage() {
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: spacing.sm,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
-                      color: colors.text.primary,
+                      gap: '0.75rem',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
+                      color: '#171717',
                       cursor: 'pointer',
                     }}
                   >
@@ -2077,14 +2166,14 @@ export default function AddTemplePage() {
               </div>
 
               {/* Custom Fields */}
-              <div style={{ marginBottom: spacing.lg, paddingTop: spacing.lg, borderTop: `2px solid ${colors.border}` }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.base }}>
+              <div style={{ marginBottom: '1.5rem', paddingTop: '1.5rem', borderTop: '2px solid #e5e5e5' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                   <h3
                     style={{
-                      fontFamily: typography.sectionHeader.fontFamily,
-                      fontSize: typography.body.fontSize,
+                      fontFamily: 'var(--font-noto-serif), serif',
+                      fontSize: '16px',
                       fontWeight: 600,
-                      color: colors.text.primary,
+                      color: '#171717',
                     }}
                   >
                     Custom Fields
@@ -2094,12 +2183,12 @@ export default function AddTemplePage() {
                     onClick={() => setShowAddCustomField(!showAddCustomField)}
                     className="rounded-2xl"
                     style={{
-                      padding: `${spacing.sm} ${spacing.base}`,
-                      backgroundColor: colors.background.subtle,
-                      color: colors.primary.base,
-                      border: `1px solid ${colors.primary.base}`,
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
+                      padding: '0.75rem 1rem',
+                      backgroundColor: '#fafafa',
+                      color: '#c2410c',
+                      border: '1px solid #c2410c',
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
                       fontWeight: 500,
                       cursor: 'pointer',
                     }}
@@ -2111,12 +2200,11 @@ export default function AddTemplePage() {
                 {/* Add Custom Field Form */}
                 {showAddCustomField && (
                   <div className="rounded-2xl" style={{ 
-                    padding: spacing.base, 
-                    marginBottom: spacing.base,
-                    backgroundColor: colors.background.subtle,
-                    border: `1px solid ${colors.border}`,
+                    padding: '1rem', 
+                    marginBottom: '1rem',
+                                border: '1px solid #e5e5e5',
                   }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: spacing.base, alignItems: 'stretch' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '1rem', alignItems: 'stretch' }}>
                       <div style={{ display: 'flex', alignItems: 'stretch' }}>
                         <input
                           type="text"
@@ -2126,12 +2214,12 @@ export default function AddTemplePage() {
                           className="rounded-2xl"
                           style={{
                             width: '100%',
-                            padding: `0 ${spacing.base}`,
-                            border: `1px solid ${colors.border}`,
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
-                            color: colors.text.primary,
-                            backgroundColor: colors.background.base,
+                            padding: '0 1rem',
+                            border: '1px solid #e5e5e5',
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                            fontSize: '16px',
+                            color: '#171717',
+                            backgroundColor: '#ffffff',
                             boxSizing: 'border-box',
                             height: '44px',
                             lineHeight: '44px',
@@ -2149,13 +2237,15 @@ export default function AddTemplePage() {
                           className="rounded-2xl"
                           style={{
                             width: '100%',
-                            padding: `0 ${spacing.base}`,
+                            paddingTop: 0,
+                            paddingBottom: 0,
+                            paddingLeft: '1rem',
                             paddingRight: '40px',
-                            border: `1px solid ${colors.border}`,
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
-                            color: colors.text.primary,
-                            backgroundColor: colors.background.base,
+                            border: '1px solid #e5e5e5',
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                            fontSize: '16px',
+                            color: '#171717',
+                            backgroundColor: '#ffffff',
                             boxSizing: 'border-box',
                             height: '44px',
                             lineHeight: '44px',
@@ -2176,7 +2266,7 @@ export default function AddTemplePage() {
                         <div
                           style={{
                             position: 'absolute',
-                            right: spacing.base,
+                            right: '1rem',
                             top: '50%',
                             transform: 'translateY(-50%)',
                             pointerEvents: 'none',
@@ -2192,25 +2282,25 @@ export default function AddTemplePage() {
                             stroke="currentColor"
                             viewBox="0 0 24 24"
                             style={{
-                              color: colors.text.muted,
+                              color: '#737373',
                             }}
                           >
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                           </svg>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: spacing.xs, alignItems: 'stretch' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
                         <button
                           type="button"
                           onClick={addCustomField}
                           className="rounded-2xl"
                           style={{
-                            padding: `0 ${spacing.base}`,
-                            backgroundColor: colors.primary.base,
+                            padding: '0 1rem',
+                            backgroundColor: '#67461b',
                             color: '#ffffff',
                             border: 'none',
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                            fontSize: '16px',
                             fontWeight: 500,
                             cursor: 'pointer',
                             height: '44px',
@@ -2232,12 +2322,12 @@ export default function AddTemplePage() {
                           }}
                           className="rounded-2xl"
                           style={{
-                            padding: `0 ${spacing.base}`,
-                            backgroundColor: colors.background.base,
-                            color: colors.text.primary,
-                            border: `1px solid ${colors.border}`,
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
+                            padding: '0 1rem',
+                            backgroundColor: '#ffffff',
+                            color: '#171717',
+                            border: '1px solid #e5e5e5',
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                            fontSize: '16px',
                             cursor: 'pointer',
                             height: '44px',
                             whiteSpace: 'nowrap',
@@ -2257,15 +2347,15 @@ export default function AddTemplePage() {
 
                 {/* Custom Fields List */}
                 {customFields.map((field) => (
-                  <div key={field.id} style={{ marginBottom: spacing.base }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: spacing.base, marginBottom: spacing.xs }}>
+                  <div key={field.id} style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
                       <label
                         style={{
                           flex: 1,
-                          fontFamily: typography.body.fontFamily,
-                          fontSize: typography.body.fontSize,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                          fontSize: '16px',
                           fontWeight: 600,
-                          color: colors.text.primary,
+                          color: '#171717',
                         }}
                       >
                         {field.label}
@@ -2275,7 +2365,7 @@ export default function AddTemplePage() {
                         onClick={() => removeCustomField(field.id)}
                         className="rounded-3xl"
                         style={{
-                          padding: spacing.xs,
+                          padding: '0.5rem',
                           backgroundColor: 'transparent',
                           color: '#dc2626',
                           border: 'none',
@@ -2294,12 +2384,12 @@ export default function AddTemplePage() {
                         className="rounded-2xl"
                         style={{
                           width: '100%',
-                          padding: spacing.base,
-                          border: `1px solid ${colors.border}`,
-                          fontFamily: typography.body.fontFamily,
-                          fontSize: typography.body.fontSize,
-                          color: colors.text.primary,
-                          backgroundColor: colors.background.base,
+                          padding: '1rem',
+                          border: '1px solid #e5e5e5',
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                          fontSize: '16px',
+                          color: '#171717',
+                          backgroundColor: '#ffffff',
                           resize: 'vertical',
                         }}
                       />
@@ -2311,12 +2401,12 @@ export default function AddTemplePage() {
                         className="rounded-2xl"
                         style={{
                           width: '100%',
-                          padding: spacing.base,
-                          border: `1px solid ${colors.border}`,
-                          fontFamily: typography.body.fontFamily,
-                          fontSize: typography.body.fontSize,
-                          color: colors.text.primary,
-                          backgroundColor: colors.background.base,
+                          padding: '1rem',
+                          border: '1px solid #e5e5e5',
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                          fontSize: '16px',
+                          color: '#171717',
+                          backgroundColor: '#ffffff',
                         }}
                       />
                     )}
@@ -2325,18 +2415,18 @@ export default function AddTemplePage() {
               </div>
 
               {/* Form Actions */}
-              <div style={{ display: 'flex', gap: spacing.base, justifyContent: 'flex-end' }}>
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
                   onClick={handleCloseModal}
                   className="rounded-2xl"
                   style={{
-                    padding: `${spacing.base} ${spacing.lg}`,
-                    border: `1px solid ${colors.border}`,
-                    backgroundColor: colors.background.base,
-                    color: colors.text.primary,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
+                    padding: `${'1rem'} ${'1.5rem'}`,
+                    border: '1px solid #e5e5e5',
+                    backgroundColor: '#ffffff',
+                    color: '#171717',
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
                     fontWeight: 500,
                     cursor: 'pointer',
                   }}
@@ -2348,12 +2438,12 @@ export default function AddTemplePage() {
                   disabled={isSubmitting}
                   className="rounded-2xl"
                   style={{
-                    padding: `${spacing.base} ${spacing.lg}`,
-                    backgroundColor: isSubmitting ? colors.text.muted : colors.primary.base,
+                    padding: `${'1rem'} ${'1.5rem'}`,
+                    backgroundColor: isSubmitting ? '#737373' : '#c2410c',
                     color: '#ffffff',
                     border: 'none',
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
                     fontWeight: 500,
                     cursor: isSubmitting ? 'not-allowed' : 'pointer',
                     opacity: isSubmitting ? 0.6 : 1,
@@ -2381,7 +2471,7 @@ export default function AddTemplePage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: spacing.lg,
+            padding: '1.5rem',
           }}
           onClick={() => {
             setShowChildDetailModal(false);
@@ -2389,10 +2479,10 @@ export default function AddTemplePage() {
           }}
         >
           <div
-            className={`rounded-3xl overflow-y-auto ${animations.modalContentEnter}`}
+            className="rounded-3xl overflow-y-auto transition-all"
             style={{
-              backgroundColor: colors.background.base,
-              padding: spacing.xl,
+              backgroundColor: '#ffffff',
+              padding: '2rem',
               maxWidth: '800px',
               width: '100%',
               maxHeight: '90vh',
@@ -2400,13 +2490,13 @@ export default function AddTemplePage() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h2
                 style={{
-                  fontFamily: typography.sectionHeader.fontFamily,
-                  fontSize: typography.sectionHeader.fontSize,
-                  fontWeight: typography.sectionHeader.fontWeight,
-                  color: colors.text.primary,
+                  fontFamily: 'var(--font-noto-serif), serif',
+                  fontSize: '20px',
+                  fontWeight: '500',
+                  color: '#171717',
                 }}
               >
                 {selectedChildTemple.name}
@@ -2420,9 +2510,9 @@ export default function AddTemplePage() {
                   background: 'none',
                   border: 'none',
                   fontSize: '24px',
-                  color: colors.text.muted,
+                  color: '#737373',
                   cursor: 'pointer',
-                  padding: spacing.xs,
+                  padding: '0.5rem',
                   lineHeight: 1,
                 }}
               >
@@ -2436,10 +2526,11 @@ export default function AddTemplePage() {
                 className="overflow-hidden rounded-2xl"
                 style={{
                   width: '100%',
-                  marginBottom: spacing.lg,
-                  backgroundColor: colors.background.subtle,
+                  marginBottom: '1.5rem',
+                  backgroundColor: '#fafafa',
                   position: 'relative',
-                  minHeight: '400px',
+                  aspectRatio: '16/9',
+                  maxHeight: '280px',
                   display: 'flex',
                   justifyContent: 'center',
                   alignItems: 'center',
@@ -2467,13 +2558,13 @@ export default function AddTemplePage() {
                 <div
                   style={{
                     position: 'absolute',
-                    top: spacing.base,
-                    left: spacing.base,
-                    padding: `${spacing.xs} ${spacing.sm}`,
+                    top: '1rem',
+                    left: '1rem',
+                    padding: `${'0.5rem'} ${'0.75rem'}`,
                     borderRadius: '8px',
-                    backgroundColor: selectedChildTemple.status === 'active' ? colors.success.base : colors.error.base,
+                    backgroundColor: selectedChildTemple.status === 'active' ? '#a87738' : '#dc2626',
                     color: '#ffffff',
-                    fontFamily: typography.body.fontFamily,
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
                     fontSize: '12px',
                     fontWeight: 600,
                     textTransform: 'uppercase',
@@ -2487,8 +2578,8 @@ export default function AddTemplePage() {
                   data-upload-overlay
                   style={{
                     position: 'absolute',
-                    top: spacing.base,
-                    right: spacing.base,
+                    top: '1rem',
+                    right: '1rem',
                     opacity: 0,
                     transition: 'opacity 0.2s ease-in-out',
                     cursor: 'pointer',
@@ -2504,7 +2595,7 @@ export default function AddTemplePage() {
                     style={{
                       width: '50px',
                       height: '50px',
-                      backgroundColor: colors.primary.base,
+                      backgroundColor: '#67461b',
                       color: '#ffffff',
                     }}
                   >
@@ -2538,21 +2629,21 @@ export default function AddTemplePage() {
                 className="overflow-hidden rounded-2xl"
                 style={{
                   width: '100%',
-                  marginBottom: spacing.lg,
-                  backgroundColor: colors.background.subtle,
+                  marginBottom: '1.5rem',
+                  backgroundColor: '#fafafa',
                   display: 'flex',
                   justifyContent: 'center',
                   alignItems: 'center',
                   minHeight: '400px',
-                  border: `2px dashed ${colors.border}`,
+                  border: '2px dashed #e5e5e5',
                   position: 'relative',
                 }}
                 onClick={() => {
                   document.getElementById(`child-image-modal-${selectedChildTemple.id}`)?.click();
                 }}
               >
-                <div style={{ textAlign: 'center', color: colors.text.muted }}>
-                  <div style={{ fontSize: '48px', marginBottom: spacing.sm }}>📷</div>
+                <div style={{ textAlign: 'center', color: '#737373' }}>
+                  <div style={{ fontSize: '48px', marginBottom: '0.75rem' }}>📷</div>
                   <div style={{ fontSize: '14px' }}>No image - Click to upload</div>
                 </div>
                 {/* Hidden file input for modal image upload */}
@@ -2567,26 +2658,26 @@ export default function AddTemplePage() {
             )}
 
             {/* Child Temple Details - Mirror Parent Layout */}
-            <div style={{ marginBottom: spacing.lg }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.base }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                 <div style={{ flex: 1 }}>
                   <h3
                     style={{
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
                       fontWeight: 600,
-                      color: colors.text.primary,
-                      marginBottom: spacing.xs,
+                      color: '#171717',
+                      marginBottom: '0.5rem',
                     }}
                   >
                     {selectedChildTemple.name}
                   </h3>
                   <p
                     style={{
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
-                      color: colors.text.muted,
-                      marginBottom: spacing.xs,
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
+                      color: '#737373',
+                      marginBottom: '0.5rem',
                     }}
                   >
                     {selectedChildTemple.location}
@@ -2598,10 +2689,10 @@ export default function AddTemplePage() {
               {selectedChildTemple.description && (
                 <p
                   style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.secondary,
-                    marginBottom: spacing.base,
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
+                    color: '#404040',
+                    marginBottom: '1rem',
                     lineHeight: '1.5',
                   }}
                 >
@@ -2620,10 +2711,10 @@ export default function AddTemplePage() {
                   style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(2, 1fr)',
-                    gap: spacing.base,
-                    marginBottom: spacing.base,
-                    padding: spacing.base,
-                    backgroundColor: colors.background.subtle,
+                    gap: '1rem',
+                    marginBottom: '1rem',
+                    padding: '1rem',
+                    backgroundColor: '#fafafa',
                     borderRadius: '12px',
                   }}
                 >
@@ -2632,11 +2723,11 @@ export default function AddTemplePage() {
                     <div>
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
                           fontSize: '12px',
                           fontWeight: 600,
-                          color: colors.text.muted,
-                          marginBottom: spacing.xs,
+                          color: '#737373',
+                          marginBottom: '0.5rem',
                           textTransform: 'uppercase',
                         }}
                       >
@@ -2644,9 +2735,9 @@ export default function AddTemplePage() {
                       </div>
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
-                          fontSize: typography.body.fontSize,
-                          color: colors.text.primary,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                          fontSize: '16px',
+                          color: '#171717',
                         }}
                       >
                         {selectedChildTemple.openingTime}
@@ -2659,11 +2750,11 @@ export default function AddTemplePage() {
                     <div>
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
                           fontSize: '12px',
                           fontWeight: 600,
-                          color: colors.text.muted,
-                          marginBottom: spacing.xs,
+                          color: '#737373',
+                          marginBottom: '0.5rem',
                           textTransform: 'uppercase',
                         }}
                       >
@@ -2671,9 +2762,9 @@ export default function AddTemplePage() {
                       </div>
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
-                          fontSize: typography.body.fontSize,
-                          color: colors.text.primary,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                          fontSize: '16px',
+                          color: '#171717',
                         }}
                       >
                         {selectedChildTemple.closingTime}
@@ -2686,11 +2777,11 @@ export default function AddTemplePage() {
                     <div>
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
                           fontSize: '12px',
                           fontWeight: 600,
-                          color: colors.text.muted,
-                          marginBottom: spacing.xs,
+                          color: '#737373',
+                          marginBottom: '0.5rem',
                           textTransform: 'uppercase',
                         }}
                       >
@@ -2698,23 +2789,12 @@ export default function AddTemplePage() {
                       </div>
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
-                          fontSize: typography.body.fontSize,
-                          color: colors.text.primary,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                          fontSize: '16px',
+                          color: '#171717',
                         }}
                       >
-                        {selectedChildTemple.capacity - (selectedChildTemple.bookings || 0)} / {selectedChildTemple.capacity} available
-                        {selectedChildTemple.bookings && selectedChildTemple.bookings > 0 && (
-                          <span
-                            style={{
-                              marginLeft: spacing.sm,
-                              color: colors.text.muted,
-                              fontSize: '14px',
-                            }}
-                          >
-                            ({selectedChildTemple.bookings} booked)
-                          </span>
-                        )}
+                        {selectedChildTemple.capacity} / {selectedChildTemple.capacity} available
                       </div>
                     </div>
                   )}
@@ -2724,11 +2804,11 @@ export default function AddTemplePage() {
                     <div>
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
                           fontSize: '12px',
                           fontWeight: 600,
-                          color: colors.text.muted,
-                          marginBottom: spacing.xs,
+                          color: '#737373',
+                          marginBottom: '0.5rem',
                           textTransform: 'uppercase',
                         }}
                       >
@@ -2736,9 +2816,9 @@ export default function AddTemplePage() {
                       </div>
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
-                          fontSize: typography.body.fontSize,
-                          color: colors.text.primary,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                          fontSize: '16px',
+                          color: '#171717',
                         }}
                       >
                         {selectedChildTemple.deity}
@@ -2751,11 +2831,11 @@ export default function AddTemplePage() {
                     <div>
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
                           fontSize: '12px',
                           fontWeight: 600,
-                          color: colors.text.muted,
-                          marginBottom: spacing.xs,
+                          color: '#737373',
+                          marginBottom: '0.5rem',
                           textTransform: 'uppercase',
                         }}
                       >
@@ -2763,9 +2843,9 @@ export default function AddTemplePage() {
                       </div>
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
-                          fontSize: typography.body.fontSize,
-                          color: colors.text.primary,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                          fontSize: '16px',
+                          color: '#171717',
                         }}
                       >
                         {selectedChildTemple.contactPhone}
@@ -2778,11 +2858,11 @@ export default function AddTemplePage() {
                     <div>
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
                           fontSize: '12px',
                           fontWeight: 600,
-                          color: colors.text.muted,
-                          marginBottom: spacing.xs,
+                          color: '#737373',
+                          marginBottom: '0.5rem',
                           textTransform: 'uppercase',
                         }}
                       >
@@ -2790,9 +2870,9 @@ export default function AddTemplePage() {
                       </div>
                       <div
                         style={{
-                          fontFamily: typography.body.fontFamily,
-                          fontSize: typography.body.fontSize,
-                          color: colors.text.primary,
+                          fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                          fontSize: '16px',
+                          color: '#171717',
                         }}
                       >
                         {selectedChildTemple.contactEmail}
@@ -2806,19 +2886,19 @@ export default function AddTemplePage() {
               {selectedChildTemple.address && (
                 <div
                   style={{
-                    marginBottom: spacing.base,
-                    padding: spacing.base,
-                    backgroundColor: colors.background.subtle,
+                    marginBottom: '1rem',
+                    padding: '1rem',
+                    backgroundColor: '#fafafa',
                     borderRadius: '12px',
                   }}
                 >
                   <div
                     style={{
-                      fontFamily: typography.body.fontFamily,
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
                       fontSize: '12px',
                       fontWeight: 600,
-                      color: colors.text.muted,
-                      marginBottom: spacing.xs,
+                      color: '#737373',
+                      marginBottom: '0.5rem',
                       textTransform: 'uppercase',
                     }}
                   >
@@ -2826,9 +2906,9 @@ export default function AddTemplePage() {
                   </div>
                   <div
                     style={{
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
-                      color: colors.text.primary,
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                      fontSize: '16px',
+                      color: '#171717',
                     }}
                   >
                     {selectedChildTemple.address}
@@ -2840,19 +2920,19 @@ export default function AddTemplePage() {
               {selectedChildTemple.customFields && Object.keys(selectedChildTemple.customFields).length > 0 && (
                 <div
                   style={{
-                    marginBottom: spacing.base,
-                    padding: spacing.base,
-                    backgroundColor: colors.background.subtle,
+                    marginBottom: '1rem',
+                    padding: '1rem',
+                    backgroundColor: '#fafafa',
                     borderRadius: '12px',
                   }}
                 >
                   <div
                     style={{
-                      fontFamily: typography.body.fontFamily,
+                      fontFamily: 'var(--font-inter), system-ui, sans-serif',
                       fontSize: '12px',
                       fontWeight: 600,
-                      color: colors.text.muted,
-                      marginBottom: spacing.sm,
+                      color: '#737373',
+                      marginBottom: '0.75rem',
                       textTransform: 'uppercase',
                     }}
                   >
@@ -2862,27 +2942,27 @@ export default function AddTemplePage() {
                     style={{
                       display: 'grid',
                       gridTemplateColumns: 'repeat(2, 1fr)',
-                      gap: spacing.sm,
+                      gap: '0.75rem',
                     }}
                   >
                     {Object.entries(selectedChildTemple.customFields).map(([key, value]) => (
                       <div key={key}>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
                             fontSize: '12px',
                             fontWeight: 600,
-                            color: colors.text.muted,
-                            marginBottom: spacing.xs,
+                            color: '#737373',
+                            marginBottom: '0.5rem',
                           }}
                         >
                           {key}
                         </div>
                         <div
                           style={{
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
-                            color: colors.text.primary,
+                            fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                            fontSize: '16px',
+                            color: '#171717',
                           }}
                         >
                           {value}
@@ -2897,23 +2977,23 @@ export default function AddTemplePage() {
               <div
                 style={{
                   display: 'flex',
-                  gap: spacing.base,
-                  marginTop: spacing.lg,
-                  paddingTop: spacing.base,
-                  borderTop: `1px solid ${colors.border}`,
+                  gap: '1rem',
+                  marginTop: '1.5rem',
+                  paddingTop: '1rem',
+                  borderTop: '1px solid #e5e5e5',
                 }}
               >
                 <button
                   onClick={() => router.push(`/operations/temple-management/temple-details?templeId=${selectedChildTemple.id}`)}
-                  className={`rounded-xl ${animations.buttonHover} ${animations.buttonActive}`}
+                  className="rounded-xl hover:opacity-90 active:scale-95 transition-all"
                   style={{
                     flex: 1,
-                    padding: spacing.base,
-                    backgroundColor: colors.primary.base,
+                    padding: '1rem',
+                    backgroundColor: '#67461b',
                     color: '#ffffff',
                     border: 'none',
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
                     fontWeight: 500,
                     cursor: 'pointer',
                   }}
@@ -2925,23 +3005,23 @@ export default function AddTemplePage() {
                     setShowChildDetailModal(false);
                     router.push(`/operations/temple-management/add-temple?templeId=${selectedChildTemple.id}`);
                   }}
-                  className={`rounded-xl ${animations.buttonHover} ${animations.buttonActive}`}
+                  className="rounded-xl hover:opacity-90 active:scale-95 transition-all"
                   style={{
                     flex: 1,
-                    padding: spacing.base,
-                    backgroundColor: colors.background.subtle,
-                    color: colors.primary.base,
-                    border: `1px solid ${colors.primary.base}`,
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
+                    padding: '1rem',
+                    backgroundColor: '#fafafa',
+                    color: '#c2410c',
+                    border: '1px solid #c2410c',
+                    fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                    fontSize: '16px',
                     fontWeight: 500,
                     cursor: 'pointer',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = colors.background.light;
+                    e.currentTarget.style.backgroundColor = '#f5f5f5';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = colors.background.subtle;
+                    e.currentTarget.style.backgroundColor = '#fafafa';
                   }}
                 >
                   Edit
@@ -2952,5 +3032,22 @@ export default function AddTemplePage() {
         </div>
       )}
     </ModuleLayout>
+  );
+}
+
+export default function AddTemplePage() {
+  return (
+    <Suspense fallback={
+      <ModuleLayout
+        title="Add Temple"
+        description="Add a new temple to the system"
+      >
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-500">Loading...</div>
+        </div>
+      </ModuleLayout>
+    }>
+      <AddTempleContent />
+    </Suspense>
   );
 }

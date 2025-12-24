@@ -21,12 +21,10 @@ export const navigationMenus: NavMenu = {
       id: 'operational-planning',
       label: 'Operational Planning & Control',
       subServices: [
-        { id: 'create-daily-plan', label: 'Create Daily Operations Plan' },
-        { id: 'modify-daily-plan', label: 'Modify Daily Operations Plan' },
+        { id: 'daily-operations-plan', label: 'Daily Operations Plan' },
       ],
       functions: [
-        { id: 'view-operations', label: 'View Operations Dashboard' },
-        { id: 'plan-calendar', label: 'Operations Calendar' },
+        { id: 'operations-calendar', label: 'Operations Calendar' },
         { id: 'control-panel', label: 'Control Panel' },
       ],
     },
@@ -60,24 +58,21 @@ export const navigationMenus: NavMenu = {
     },
     {
       id: 'ritual-seva-booking',
-      label: 'Ritual, Seva & Booking Management',
+      label: 'Seva and Darshan Management',
       subServices: [
-        { id: 'define-seva', label: 'Define Seva' },
-        { id: 'schedule-seva', label: 'Schedule Seva' },
-        { id: 'execute-seva', label: 'Execute Seva' },
-        { id: 'create-booking', label: 'Create Booking' },
+        { id: 'define-seva', label: 'Manage Sevas' },
+        { id: 'slot-management', label: 'Slot Management' },
+        { id: 'pricing-management', label: 'Pricing Management' },
       ],
       functions: [
-        { id: 'seva-calendar', label: 'Seva Calendar' },
-        { id: 'booking-management', label: 'Booking Management' },
-        { id: 'ritual-schedule', label: 'Ritual Schedule' },
+        { id: 'seva-details', label: 'View Sevas' },
       ],
     },
     {
       id: 'crowd-capacity',
       label: 'Crowd & Capacity Management',
       subServices: [
-        { id: 'lock-capacity', label: 'Lock / Unlock Capacity' },
+        { id: 'lock-capacity', label: 'Manage Capacity' },
       ],
       functions: [
         { id: 'capacity-dashboard', label: 'Capacity Dashboard' },
@@ -88,8 +83,11 @@ export const navigationMenus: NavMenu = {
       id: 'kitchen-prasad',
       label: 'Kitchen & Prasad Operations',
       subServices: [
-        { id: 'plan-prasad-menu', label: 'Plan Prasad Menu' },
+        { id: 'kitchen-planning', label: 'Kitchen Planning' },
         { id: 'prepare-prasad', label: 'Prepare & Distribute Prasad' },
+        { id: 'distribution/counter-distribution', label: 'Counter Distribution' },
+        { id: 'distribution/seva-distribution', label: 'Seva Distribution' },
+        { id: 'distribution/annadan-distribution', label: 'Annadan Distribution' },
       ],
       functions: [
         { id: 'prasad-menu', label: 'Prasad Menu Management' },
@@ -103,9 +101,11 @@ export const navigationMenus: NavMenu = {
         { id: 'add-stock', label: 'Add Stock' },
         { id: 'issue-stock', label: 'Issue Stock' },
         { id: 'record-wastage', label: 'Record Wastage' },
+        { id: 'rework-stock', label: 'Rework Stock' },
+        { id: 'request-stock', label: 'Request Stock' },
       ],
       functions: [
-        { id: 'inventory-dashboard', label: 'Inventory Dashboard' },
+        { id: '', label: 'Inventory Dashboard' }, // Main dashboard - empty id means root page
         { id: 'stock-reports', label: 'Stock Reports' },
       ],
     },
@@ -163,6 +163,7 @@ export const navigationMenus: NavMenu = {
       id: 'freelancer-management',
       label: 'Freelancer Management',
       subServices: [
+        { id: 'add-freelancer', label: 'Add / Manage Freelancer' },
         { id: 'create-contract', label: 'Create Contract' },
         { id: 'submit-work-log', label: 'Submit Work Log' },
       ],
@@ -199,10 +200,12 @@ export const navigationMenus: NavMenu = {
       label: 'Content Management',
       subServices: [
         { id: 'edit-content', label: 'Edit Temple Content' },
+        { id: 'content-editor', label: 'Content Editor' },
       ],
       functions: [
-        { id: 'content-editor', label: 'Content Editor' },
         { id: 'content-library', label: 'Content Library' },
+        { id: 'content-approval', label: 'Content Approval' },
+        { id: 'content-history', label: 'Content History' },
       ],
     },
     {
@@ -278,6 +281,7 @@ export const navigationMenus: NavMenu = {
         { id: 'financial-dashboard', label: 'Financial Dashboard' },
         { id: 'transaction-ledger', label: 'Transaction Ledger' },
         { id: 'financial-reports', label: 'Financial Reports' },
+        { id: 'stock-requests', label: 'Stock Requests Approval' },
       ],
     },
     {

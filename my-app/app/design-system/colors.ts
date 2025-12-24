@@ -73,9 +73,9 @@ export const colors = {
   
   // Semantic colors (complementary to brand)
   success: {
-    base: '#16a34a',
-    light: '#dcfce7',  // Light green background
-    dark: '#15803d',   // Darker green for borders/text
+    base: '#a87738',
+    light: '#e4cc96',  // Light green background
+    dark: '#67461b',   // Darker green for borders/text
   },
   warning: {
     base: '#f59e0b',

@@ -1,317 +1,255 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ModuleLayout from '../../../components/layout/ModuleLayout';
-import { colors, spacing, typography } from '../../../design-system';
+import { getTempleById, getChildTemples, getAllTemples, type Temple } from '../templeData';
 
-interface Seva {
-  id: string;
-  name: string;
-  type: string;
-  duration: string;
-  price: number;
-  status: 'active' | 'inactive';
-}
-
-interface Temple {
-  id: string;
-  name: string;
-  location: string;
-  description?: string;
-  type: 'parent' | 'child';
-  parentTempleId?: string;
-  parentTempleName?: string;
-  status: 'active' | 'inactive';
-  sevas: Seva[];
-  childTemples?: Array<{ id: string; name: string; location: string }>;
-}
-
-export default function TempleDetailsPage() {
+function TempleDetailsContent() {
   const searchParams = useSearchParams();
   const templeId = searchParams ? searchParams.get('templeId') || '1' : '1';
+  
+  const [temple, setTemple] = useState<Temple | null>(null);
+  const [childTemples, setChildTemples] = useState<Temple[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Mock data - will be replaced with actual API call
-  const temple: Temple = {
-    id: templeId,
-    name: 'Main Temple Complex',
-    location: 'City Center',
-    description: 'The main temple complex serving as the headquarters for all temple operations.',
-    type: 'parent',
-    status: 'active',
-    sevas: [
-      {
-        id: '1',
-        name: 'Morning Aarti',
-        type: 'Daily Ritual',
-        duration: '60 minutes',
-        price: 500,
-        status: 'active',
-      },
-      {
-        id: '2',
-        name: 'Abhishekam',
-        type: 'Puja',
-        duration: '45 minutes',
-        price: 1000,
-        status: 'active',
-      },
-      {
-        id: '3',
-        name: 'Special Puja',
-        type: 'Special Service',
-        duration: '90 minutes',
-        price: 2500,
-        status: 'active',
-      },
-      {
-        id: '4',
-        name: 'Evening Aarti',
-        type: 'Daily Ritual',
-        duration: '60 minutes',
-        price: 500,
-        status: 'active',
-      },
-    ],
-    childTemples: [
-      { id: '2', name: 'North Branch Temple', location: 'North District' },
-      { id: '3', name: 'South Branch Temple', location: 'South District' },
-    ],
+  useEffect(() => {
+    // Always reload from getAllTemples to get latest localStorage images
+    const allTemples = getAllTemples();
+    const currentTemple = allTemples.find(t => t.id === templeId);
+    if (currentTemple) {
+      setTemple(currentTemple);
+      const children = currentTemple.type === 'parent' && currentTemple.childTemples
+        ? currentTemple.childTemples.map(id => allTemples.find(t => t.id === id)).filter(Boolean) as Temple[]
+        : [];
+      setChildTemples(children);
+    }
+  }, [templeId, refreshKey]);
+
+  if (!temple) {
+    return (
+      <ModuleLayout title="Temple Not Found" description="The requested temple could not be found">
+        <div className="px-6 py-8 text-center text-gray-600 font-sans">
+          Temple with ID {templeId} not found.
+        </div>
+      </ModuleLayout>
+    );
+  }
+
+  const isMainTemple = temple.type === 'parent';
+
+  const handleImageUpload = (templeId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size should be less than 5MB');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (reader.result) {
+          const base64String = reader.result as string;
+          const storageKey = `temple-image-${templeId}`;
+          localStorage.setItem(storageKey, base64String);
+          
+          // Reload temple data from getAllTemples to ensure we get the latest image
+          const allTemples = getAllTemples();
+          const updatedTemple = allTemples.find(t => t.id === templeId);
+          if (updatedTemple) {
+            setTemple(updatedTemple);
+            
+            // Refresh child temples if this is a parent temple
+            if (updatedTemple.type === 'parent' && updatedTemple.childTemples) {
+              const children = updatedTemple.childTemples
+                .map(id => allTemples.find(t => t.id === id))
+                .filter(Boolean) as Temple[];
+              setChildTemples(children);
+            }
+          }
+          
+          // Trigger refresh to update UI
+          setRefreshKey(prev => prev + 1);
+          
+          // Reset file input to allow same file upload again
+          e.target.value = '';
+        }
+      };
+      reader.onerror = () => {
+        alert('Error reading image file. Please try again.');
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   return (
     <ModuleLayout
-      title={temple.name}
+      title={temple.deity || temple.name}
       description={`Temple Details - ${temple.location}`}
     >
-      {/* Temple Information Card */}
-      <div 
-        className="rounded-3xl p-6 mb-8"
-        style={{
-          backgroundColor: colors.background.base,
-          border: `1px solid ${colors.border}`,
-          padding: spacing.xl,
-          marginBottom: spacing.xl,
-        }}
-      >
+      {/* Breadcrumb for Child Temples */}
+      {!isMainTemple && temple.parentTempleName && (
+        <div className="mb-6">
+          <Link
+            href={`/operations/temple-management/temple-details?templeId=${temple.parentTempleId}`}
+            className="font-sans text-base text-amber-600 hover:text-amber-700 hover:underline transition-colors"
+          >
+            ← Back to {temple.parentTempleName}
+          </Link>
+        </div>
+      )}
+
+      {/* Temple Image and Information Card */}
+      <div className={`bg-white border rounded-3xl overflow-hidden mb-8 shadow-sm ${
+        isMainTemple ? 'border-2 border-amber-600 bg-amber-50' : 'border border-gray-200'
+      }`}>
+        {/* Temple Image */}
+        <div className="w-full aspect-video max-h-[500px] bg-gray-100 relative">
+          <img
+            key={`temple-img-${temple.id}-${temple.image?.substring(0, 50)}`}
+            src={temple.image || '/placeholder-temple.jpg'}
+            alt={temple.name}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = '/placeholder-temple.jpg';
+            }}
+          />
+          <label className="absolute top-2 right-2 cursor-pointer bg-white bg-opacity-90 hover:bg-opacity-100 rounded-full p-2 shadow-md transition-all duration-200 hover:scale-110 z-10" title="Replace image">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleImageUpload(temple.id, e)}
+              className="hidden"
+            />
+            <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12m0 0l4-4m-4 4l-4 4" />
+            </svg>
+          </label>
+        </div>
+
+        {/* Temple Information */}
+        <div className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <h2
-              style={{
-                fontFamily: typography.sectionHeader.fontFamily,
-                fontSize: typography.sectionHeader.fontSize,
-                fontWeight: typography.sectionHeader.fontWeight,
-                marginBottom: spacing.base,
-                color: colors.text.primary,
-              }}
-            >
-              Temple Information
-            </h2>
-            <div style={{ marginBottom: spacing.base }}>
-              <span
-                style={{
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                  fontWeight: 600,
-                  color: colors.text.muted,
-                  display: 'inline-block',
-                  width: '120px',
-                }}
-              >
+            <div className="flex items-center gap-3 mb-4">
+              <h2 className="font-serif text-xl font-medium text-gray-900">
+                Temple Information
+              </h2>
+              {isMainTemple && (
+                <span className="bg-amber-600 text-white px-3 py-1 rounded-xl text-sm font-semibold font-sans">
+                  Main Temple
+                </span>
+              )}
+            </div>
+            <div className="mb-4">
+              <span className="inline-block w-30 font-sans text-base font-semibold text-gray-600">
                 Name:
               </span>
-              <span
-                style={{
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                  color: colors.text.primary,
-                }}
-              >
+              <span className="font-sans text-base text-gray-900 ml-2">
                 {temple.name}
               </span>
             </div>
-            <div style={{ marginBottom: spacing.base }}>
-              <span
-                style={{
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                  fontWeight: 600,
-                  color: colors.text.muted,
-                  display: 'inline-block',
-                  width: '120px',
-                }}
-              >
+            <div className="mb-4">
+              <span className="inline-block w-30 font-sans text-base font-semibold text-gray-600">
                 Location:
               </span>
-              <span
-                style={{
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                  color: colors.text.primary,
-                }}
-              >
+              <span className="font-sans text-base text-gray-900 ml-2">
                 {temple.location}
               </span>
             </div>
-            <div style={{ marginBottom: spacing.base }}>
-              <span
-                style={{
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                  fontWeight: 600,
-                  color: colors.text.muted,
-                  display: 'inline-block',
-                  width: '120px',
-                }}
-              >
+            <div className="mb-4">
+              <span className="inline-block w-30 font-sans text-base font-semibold text-gray-600">
                 Type:
               </span>
-              <span
-                className="rounded-xl"
-                style={{
-                  padding: `${spacing.xs} ${spacing.sm}`,
-                  backgroundColor: temple.type === 'parent' ? colors.background.subtle : colors.background.light,
-                  color: temple.type === 'parent' ? colors.primary.base : colors.text.muted,
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                }}
-              >
+              <span className={`inline-block px-2 py-1 rounded-xl text-sm font-sans ml-2 ${
+                temple.type === 'parent' ? 'text-amber-600' : 'text-gray-600'
+              }`}>
                 {temple.type === 'parent' ? 'Parent Temple' : 'Child Temple'}
               </span>
             </div>
             {temple.parentTempleName && (
-              <div style={{ marginBottom: spacing.base }}>
-                <span
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    fontWeight: 600,
-                    color: colors.text.muted,
-                    display: 'inline-block',
-                    width: '120px',
-                  }}
-                >
+              <div className="mb-4">
+                <span className="inline-block w-30 font-sans text-base font-semibold text-gray-600">
                   Parent Temple:
                 </span>
-                <span
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.primary.base,
-                  }}
-                >
+                <span className="font-sans text-base text-amber-600 ml-2">
                   {temple.parentTempleName}
                 </span>
               </div>
             )}
-            <div style={{ marginBottom: spacing.base }}>
-              <span
-                style={{
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                  fontWeight: 600,
-                  color: colors.text.muted,
-                  display: 'inline-block',
-                  width: '120px',
-                }}
-              >
+            <div className="mb-4">
+              <span className="inline-block w-30 font-sans text-base font-semibold text-gray-600">
                 Status:
               </span>
-              <span
-                className="rounded-xl"
-                style={{
-                  padding: `${spacing.xs} ${spacing.sm}`,
-                  backgroundColor: temple.status === 'active' ? '#d4edda' : '#f8d7da',
-                  color: temple.status === 'active' ? '#155724' : '#721c24',
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                }}
-              >
+              <span className={`inline-block px-2 py-1 rounded-xl text-sm font-sans ml-2 ${
+                temple.status === 'active' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
+              }`}>
                 {temple.status === 'active' ? 'Active' : 'Inactive'}
               </span>
             </div>
             {temple.description && (
-              <div style={{ marginTop: spacing.base }}>
-                <p
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.muted,
-                    lineHeight: 1.6,
-                  }}
-                >
+              <div className="mt-4">
+                <p className="font-sans text-base text-gray-600 leading-relaxed">
                   {temple.description}
                 </p>
+              </div>
+            )}
+            {temple.address && (
+              <div className="mt-4">
+                <span className="inline-block w-30 font-sans text-base font-semibold text-gray-600">
+                  Address:
+                </span>
+                <span className="font-sans text-base text-gray-900 ml-2">
+                  {temple.address}
+                </span>
+              </div>
+            )}
+            {temple.contactPhone && (
+              <div className="mt-4">
+                <span className="inline-block w-30 font-sans text-base font-semibold text-gray-600">
+                  Phone:
+                </span>
+                <span className="font-sans text-base text-gray-900 ml-2">
+                  {temple.contactPhone}
+                </span>
+              </div>
+            )}
+            {temple.openingTime && temple.closingTime && (
+              <div className="mt-4">
+                <span className="inline-block w-30 font-sans text-base font-semibold text-gray-600">
+                  Timings:
+                </span>
+                <span className="font-sans text-base text-gray-900 ml-2">
+                  {temple.openingTime} - {temple.closingTime}
+                </span>
               </div>
             )}
           </div>
 
           {/* Actions */}
           <div>
-            <h2
-              style={{
-                fontFamily: typography.sectionHeader.fontFamily,
-                fontSize: typography.sectionHeader.fontSize,
-                fontWeight: typography.sectionHeader.fontWeight,
-                marginBottom: spacing.base,
-                color: colors.text.primary,
-              }}
-            >
+            <h2 className="font-serif text-xl font-medium mb-4 text-gray-900">
               Actions
             </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.base }}>
+            <div className="flex flex-col gap-4">
               <Link
                 href={`/operations/temple-management/add-temple?templeId=${temple.id}`}
-                className="rounded-2xl"
-                style={{
-                  padding: spacing.base,
-                  backgroundColor: colors.primary.base,
-                  color: '#ffffff',
-                  textDecoration: 'none',
-                  textAlign: 'center',
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                  fontWeight: 500,
-                  transition: 'opacity 0.2s',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
-                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                className="bg-amber-600 text-white px-4 py-3 rounded-2xl text-center font-sans text-base font-medium hover:bg-amber-700 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 no-underline"
               >
                 Edit Temple
-              </Link>
-              <Link
-                href={`/operations/temple-management/assign-sevas?templeId=${temple.id}`}
-                className="rounded-2xl"
-                style={{
-                  padding: spacing.base,
-                  backgroundColor: colors.background.subtle,
-                  color: colors.primary.base,
-                  border: `1px solid ${colors.primary.base}`,
-                  textDecoration: 'none',
-                  textAlign: 'center',
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                  fontWeight: 500,
-                }}
-              >
-                Manage Sevas
               </Link>
               {temple.type === 'parent' && (
                 <Link
                   href={`/operations/temple-management/manage-hierarchy?templeId=${temple.id}`}
-                  className="rounded-2xl"
-                  style={{
-                    padding: spacing.base,
-                    backgroundColor: colors.background.subtle,
-                    color: colors.primary.base,
-                    border: `1px solid ${colors.primary.base}`,
-                    textDecoration: 'none',
-                    textAlign: 'center',
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    fontWeight: 500,
-                  }}
+                  className="border border-amber-600 text-amber-600 px-4 py-3 rounded-2xl text-center font-sans text-base font-medium hover:bg-amber-50 transition-all duration-200 transform hover:scale-105 no-underline"
                 >
                   Manage Hierarchy
                 </Link>
@@ -319,265 +257,103 @@ export default function TempleDetailsPage() {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Sevas List */}
-      <div 
-        className="rounded-3xl p-6 mb-8"
-        style={{
-          backgroundColor: colors.background.base,
-          border: `1px solid ${colors.border}`,
-          padding: spacing.xl,
-          marginBottom: spacing.xl,
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg }}>
-          <h2
-            style={{
-              fontFamily: typography.sectionHeader.fontFamily,
-              fontSize: typography.sectionHeader.fontSize,
-              fontWeight: typography.sectionHeader.fontWeight,
-              color: colors.text.primary,
-            }}
-          >
-            Associated Sevas ({temple.sevas.length})
-          </h2>
-          <Link
-            href={`/operations/temple-management/assign-sevas?templeId=${temple.id}`}
-            className="rounded-2xl"
-            style={{
-              padding: `${spacing.sm} ${spacing.base}`,
-              backgroundColor: colors.primary.base,
-              color: '#ffffff',
-              textDecoration: 'none',
-              fontFamily: typography.body.fontFamily,
-              fontSize: typography.body.fontSize,
-              fontWeight: 500,
-            }}
-          >
-            Add Sevas
-          </Link>
         </div>
-
-        {temple.sevas.length > 0 ? (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: `2px solid ${colors.border}` }}>
-                  <th
-                    style={{
-                      padding: spacing.base,
-                      textAlign: 'left',
-                      fontFamily: typography.sectionHeader.fontFamily,
-                      fontSize: typography.sectionHeader.fontSize,
-                      fontWeight: typography.sectionHeader.fontWeight,
-                      color: colors.text.primary,
-                    }}
-                  >
-                    Seva Name
-                  </th>
-                  <th
-                    style={{
-                      padding: spacing.base,
-                      textAlign: 'left',
-                      fontFamily: typography.sectionHeader.fontFamily,
-                      fontSize: typography.sectionHeader.fontSize,
-                      fontWeight: typography.sectionHeader.fontWeight,
-                      color: colors.text.primary,
-                    }}
-                  >
-                    Type
-                  </th>
-                  <th
-                    style={{
-                      padding: spacing.base,
-                      textAlign: 'left',
-                      fontFamily: typography.sectionHeader.fontFamily,
-                      fontSize: typography.sectionHeader.fontSize,
-                      fontWeight: typography.sectionHeader.fontWeight,
-                      color: colors.text.primary,
-                    }}
-                  >
-                    Duration
-                  </th>
-                  <th
-                    style={{
-                      padding: spacing.base,
-                      textAlign: 'left',
-                      fontFamily: typography.sectionHeader.fontFamily,
-                      fontSize: typography.sectionHeader.fontSize,
-                      fontWeight: typography.sectionHeader.fontWeight,
-                      color: colors.text.primary,
-                    }}
-                  >
-                    Price
-                  </th>
-                  <th
-                    style={{
-                      padding: spacing.base,
-                      textAlign: 'left',
-                      fontFamily: typography.sectionHeader.fontFamily,
-                      fontSize: typography.sectionHeader.fontSize,
-                      fontWeight: typography.sectionHeader.fontWeight,
-                      color: colors.text.primary,
-                    }}
-                  >
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {temple.sevas.map((seva) => (
-                  <tr key={seva.id} style={{ borderBottom: `1px solid ${colors.border}` }}>
-                    <td
-                      style={{
-                        padding: spacing.base,
-                        fontFamily: typography.body.fontFamily,
-                        fontSize: typography.body.fontSize,
-                        color: colors.text.primary,
-                      }}
-                    >
-                      {seva.name}
-                    </td>
-                    <td
-                      style={{
-                        padding: spacing.base,
-                        fontFamily: typography.body.fontFamily,
-                        fontSize: typography.body.fontSize,
-                        color: colors.text.primary,
-                      }}
-                    >
-                      {seva.type}
-                    </td>
-                    <td
-                      style={{
-                        padding: spacing.base,
-                        fontFamily: typography.body.fontFamily,
-                        fontSize: typography.body.fontSize,
-                        color: colors.text.muted,
-                      }}
-                    >
-                      {seva.duration}
-                    </td>
-                    <td
-                      style={{
-                        padding: spacing.base,
-                        fontFamily: typography.body.fontFamily,
-                        fontSize: typography.body.fontSize,
-                        color: colors.text.primary,
-                      }}
-                    >
-                      ₹{seva.price.toLocaleString()}
-                    </td>
-                    <td
-                      style={{
-                        padding: spacing.base,
-                        fontFamily: typography.body.fontFamily,
-                        fontSize: typography.body.fontSize,
-                      }}
-                    >
-                      <span
-                        className="rounded-xl"
-                        style={{
-                          padding: `${spacing.xs} ${spacing.sm}`,
-                          backgroundColor: seva.status === 'active' ? '#d4edda' : '#f8d7da',
-                          color: seva.status === 'active' ? '#155724' : '#721c24',
-                          fontFamily: typography.body.fontFamily,
-                          fontSize: typography.body.fontSize,
-                        }}
-                      >
-                        {seva.status === 'active' ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div
-            style={{
-              padding: spacing.xl,
-              textAlign: 'center',
-              fontFamily: typography.body.fontFamily,
-              fontSize: typography.body.fontSize,
-              color: colors.text.muted,
-            }}
-          >
-            No sevas assigned to this temple yet.
-          </div>
-        )}
       </div>
 
-      {/* Child Temples (if parent temple) */}
-      {temple.type === 'parent' && temple.childTemples && temple.childTemples.length > 0 && (
-        <div 
-          className="rounded-3xl p-6"
-          style={{
-            backgroundColor: colors.background.base,
-            border: `1px solid ${colors.border}`,
-            padding: spacing.xl,
-          }}
-        >
-          <h2
-            style={{
-              fontFamily: typography.sectionHeader.fontFamily,
-              fontSize: typography.sectionHeader.fontSize,
-              fontWeight: typography.sectionHeader.fontWeight,
-              marginBottom: spacing.lg,
-              color: colors.text.primary,
-            }}
-          >
-            Child Temples ({temple.childTemples.length})
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: spacing.base }}>
-            {temple.childTemples.map((child) => (
-              <Link
-                key={child.id}
-                href={`/operations/temple-management/temple-details?templeId=${child.id}`}
-                className="rounded-2xl"
-                style={{
-                  padding: spacing.base,
-                  border: `1px solid ${colors.border}`,
-                  backgroundColor: colors.background.subtle,
-                  textDecoration: 'none',
-                  transition: 'all 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = colors.primary.base;
-                  e.currentTarget.style.backgroundColor = colors.background.light;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = colors.border;
-                  e.currentTarget.style.backgroundColor = colors.background.subtle;
-                }}
-              >
-                <div
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    fontWeight: 600,
-                    color: colors.text.primary,
-                    marginBottom: spacing.xs,
-                  }}
-                >
-                  {child.name}
-                </div>
-                <div
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.muted,
-                  }}
-                >
-                  {child.location}
-                </div>
-              </Link>
-            ))}
+      {/* Child Temples (if main temple) */}
+      {isMainTemple && (
+        <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="font-serif text-xl font-medium text-gray-900">
+              Child Temples ({childTemples.length})
+            </h2>
+            <Link
+              href="/operations/temple-management/add-temple"
+              className="bg-amber-600 text-white px-4 py-2 rounded-2xl font-sans text-base font-medium hover:bg-amber-700 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 no-underline"
+            >
+              Add Child Temple
+            </Link>
           </div>
+          {childTemples.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {childTemples.map((child) => (
+                <Link
+                  key={child.id}
+                  href={`/operations/temple-management/temple-details?templeId=${child.id}`}
+                  className="border border-gray-200 rounded-2xl overflow-hidden no-underline transition-all hover:border-amber-600 hover:shadow-md hover:-translate-y-0.5"
+                >
+                  <div className="w-full aspect-video max-h-[250px] bg-gray-100 relative mb-4 rounded-2xl overflow-hidden">
+                    <img
+                      key={`child-img-${child.id}-${child.image?.substring(0, 50)}`}
+                      src={child.image || '/placeholder-temple.jpg'}
+                      alt={child.deity || child.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/placeholder-temple.jpg';
+                      }}
+                    />
+                    <label className="absolute top-1 right-1 cursor-pointer bg-white bg-opacity-90 hover:bg-opacity-100 rounded-full p-1.5 shadow-md">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleImageUpload(child.id, e)}
+                        className="hidden"
+                      />
+                      <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12m0 0l4-4m-4 4l-4 4" />
+                      </svg>
+                    </label>
+                  </div>
+                  <div className="px-4 pb-4">
+                    <div className="font-sans text-lg font-semibold text-amber-600 mb-1">
+                      {child.deity || child.name}
+                    </div>
+                    <div className="font-sans text-sm text-gray-600 mb-2">
+                      {child.location}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className={`px-2 py-1 rounded-lg text-xs font-sans ${
+                        child.status === 'active'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {child.status === 'active' ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="px-6 py-12 text-center font-sans text-base text-gray-600">
+              <p className="mb-4">No child temples added yet.</p>
+              <Link
+                href="/operations/temple-management/add-temple"
+                className="inline-block bg-amber-600 text-white px-6 py-3 rounded-2xl font-sans text-base font-medium hover:bg-amber-700 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 no-underline"
+              >
+                Add First Child Temple
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </ModuleLayout>
   );
 }
 
+export default function TempleDetailsPage() {
+  return (
+    <Suspense fallback={
+      <ModuleLayout
+        title="Temple Details"
+        description="View temple details and information"
+      >
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-500">Loading...</div>
+        </div>
+      </ModuleLayout>
+    }>
+      <TempleDetailsContent />
+    </Suspense>
+  );
+}

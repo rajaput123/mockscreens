@@ -1,229 +1,77 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Header from './components/layout/Header';
-import PageHeader from './components/layout/PageHeader';
-import Breadcrumbs from './components/layout/Breadcrumbs';
-import CalendarPlanningZone from './components/dashboard/CalendarPlanningZone';
-import DashboardCarousel from './components/dashboard/DashboardCarousel';
-import WelcomeModal from './components/onboarding/WelcomeModal';
-import HelpButton from './components/help/HelpButton';
-import { useOnboarding } from './hooks/useOnboarding';
-import { colors, spacing, typography, animations } from './design-system';
+import HeroSection from './components/landing/HeroSection';
+import StorySection from './components/landing/StorySection';
+import FeaturesSection from './components/landing/FeaturesSection';
+import StatsSection from './components/landing/StatsSection';
 
-export default function Dashboard() {
-  const { shouldShowOnboarding, markOnboardingComplete } = useOnboarding();
-  const [showModal, setShowModal] = useState(false);
-
-  useEffect(() => {
-    // Show modal automatically if onboarding should be shown (first visit)
-    if (shouldShowOnboarding) {
-      setShowModal(true);
-    }
-  }, [shouldShowOnboarding]);
-
-  const handleOnboardingComplete = (skipFuture: boolean) => {
-    markOnboardingComplete(skipFuture);
-    setShowModal(false);
-  };
-
-  const currentDate = new Date();
-  const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
-  const monthName = currentDate.toLocaleDateString('en-US', { month: 'long' });
-  const day = currentDate.getDate();
-  const year = currentDate.getFullYear();
-  const dateString = `${dayName}, ${monthName} ${day}, ${year}`;
-
-
-  // Calendar Events
-  const calendarEvents = [
-    { time: '06:00', name: 'Morning Aarti', type: 'Daily Ritual', load: 'High' as const, duration: '60 minutes' },
-    { time: '12:00', name: 'Madhyana Aarti', type: 'Daily Ritual', load: 'Medium' as const, duration: '45 minutes' },
-    { time: '19:00', name: 'Evening Aarti', type: 'Daily Ritual', load: 'High' as const, duration: '60 minutes', conflict: true },
-  ];
-
-  // Financial Data
-  const financialData = {
-    daily: {
-      revenue: 125000,
-      expenses: 45000,
-      net: 80000,
-      donations: 98000,
-      trend: 'up' as const,
-    },
-    monthly: {
-      revenue: 1245000,
-      expenses: 485000,
-      net: 760000,
-      donations: 320000,
-      trend: 'up' as const,
-    },
-    yearly: {
-      revenue: 15200000,
-      expenses: 5820000,
-      net: 9380000,
-      donations: 3840000,
-      trend: 'up' as const,
-    },
-  };
-
-  const expenseCategories = [
-    { name: 'Ritual Supplies', percentage: 33, amount: 14850 },
-    { name: 'Staff Salaries', percentage: 44, amount: 19800 },
-    { name: 'Facility Maintenance', percentage: 18, amount: 8100 },
-    { name: 'Utilities', percentage: 5, amount: 2250 },
-  ];
-
-  // Announcements
-  const announcements = [
-    { text: 'Guru Purnima celebration will be held on July 20th. All devotees are welcome.' },
-    { text: 'Temple will remain closed on August 15th for maintenance work.' },
-    { text: 'New seva booking system is now available. Please use the online portal for bookings.' },
-  ];
-
-  // Today's Events
-  const todayEvents = [
-    { date: '', time: '06:00', name: 'Morning Aarti', type: 'Daily Ritual', load: 'High' as const },
-    { date: '', time: '12:00', name: 'Madhyana Aarti', type: 'Daily Ritual', load: 'Medium' as const },
-    { date: '', time: '19:00', name: 'Evening Aarti', type: 'Daily Ritual', load: 'High' as const },
-  ];
-
-  // Upcoming Events
-  const upcomingEvents = [
-    { date: 'Jul 20', time: '10:00', name: 'Guru Purnima Celebration', type: 'Major Festival', load: 'High' as const },
-    { date: 'Jul 22', time: '18:00', name: 'Special Puja for Devotees', type: 'Special Event', load: 'Medium' as const },
-    { date: 'Aug 2', time: '09:00', name: 'Nag Panchami', type: 'Major Festival', load: 'High' as const },
-  ];
-
-  // Alerts
-  const alerts = [
-    {
-      id: '1',
-      severity: 'critical' as const,
-      title: 'Priest Unavailable',
-      description: 'Pandit Vishwanath Joshi unavailable for Evening Aarti today at 19:00',
-      actionLabel: 'Assign Alternative',
-    },
-    {
-      id: '2',
-      severity: 'warning' as const,
-      title: 'High Crowd Expected',
-      description: 'Guru Purnima on July 20 - expect 3x normal footfall. Additional manpower required.',
-      actionLabel: 'View Details',
-    },
-    {
-      id: '3',
-      severity: 'info' as const,
-      title: 'Donation Milestone',
-      description: 'Monthly donation target of ₹25L achieved 15 days early',
-      actionLabel: 'View Report',
-    },
-  ];
-
-  // Task Stats
-  const taskStats = {
-    total: 5,
-    pending: 2,
-    active: 1,
-    done: 1,
-    overdue: 1,
-  };
-
-  // Tasks
-  const tasks = [
-    {
-      id: '1',
-      title: 'Prepare Monthly Financial Report',
-      assignee: 'Finance Team',
-      category: 'Finance',
-      status: 'in-progress' as const,
-      priority: 'high' as const,
-      dueDate: 'Jul 20, 2025',
-    },
-    {
-      id: '2',
-      title: 'Schedule Guru Purnima Celebrations',
-      assignee: 'Event Manager',
-      category: 'Events',
-      status: 'pending' as const,
-      priority: 'high' as const,
-      dueDate: 'Jul 18, 2025',
-    },
-    {
-      id: '3',
-      title: 'Update Temple Website Content',
-      assignee: 'Content Team',
-      category: 'Content',
-      status: 'pending' as const,
-      priority: 'medium' as const,
-      dueDate: 'Jul 25, 2025',
-    },
-    {
-      id: '4',
-      title: 'Review Staff Attendance Records',
-      assignee: 'HR Manager',
-      category: 'HR',
-      status: 'completed' as const,
-      priority: 'medium' as const,
-      dueDate: 'Jul 15, 2025',
-    },
-    {
-      id: '5',
-      title: 'Maintenance Check - Main Hall',
-      assignee: 'Facilities Team',
-      category: 'Facilities',
-      status: 'overdue' as const,
-      priority: 'high' as const,
-      dueDate: 'Jul 10, 2025',
-    },
-  ];
-
+export default function LandingPage() {
   return (
-    <div 
-      className="min-h-screen"
-      style={{ backgroundColor: colors.background.base }}
-    >
-      {showModal && (
-        <WelcomeModal
-          onClose={() => setShowModal(false)}
-          onComplete={handleOnboardingComplete}
-        />
-      )}
-      <Header />
-
-      {/* Main Content */}
-      <main 
-        className="mx-auto"
-        style={{ 
-          maxWidth: spacing.containerMaxWidth,
-          paddingLeft: spacing.contentPadding,
-          paddingRight: spacing.contentPadding,
-          paddingTop: spacing.contentPaddingY,
-          paddingBottom: spacing.contentPaddingY,
-        }}
-      >
-        <Breadcrumbs items={[{ label: 'Dashboard' }]} />
-        <PageHeader dateString={dateString} />
-
-        {/* Top Section: Calendar & Carousel */}
-        <div 
-          className={`grid grid-cols-12 gap-6 ${animations.fadeInUp}`}
-          style={{ gap: spacing.lg }}
-        >
-          <CalendarPlanningZone events={calendarEvents} />
-          <DashboardCarousel
-            todayEvents={todayEvents}
-            upcomingEvents={upcomingEvents}
-            alerts={alerts}
-            taskStats={taskStats}
-            tasks={tasks}
-            financialData={financialData}
-            expenseCategories={expenseCategories}
-            announcements={announcements}
-          />
+    <div className="min-h-screen bg-white">
+      <HeroSection />
+      <StorySection />
+      <FeaturesSection />
+      <StatsSection />
+      
+      {/* Final CTA Section */}
+      <section className="relative py-32 bg-gradient-to-br from-amber-50 via-white to-amber-50 overflow-hidden">
+        {/* Animated Background Elements */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-amber-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
         </div>
-      </main>
-      <HelpButton context="dashboard" />
+        
+        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <div className="inline-block mb-6">
+            <span className="px-4 py-2 bg-amber-500/20 text-amber-300 rounded-full text-sm font-medium border border-amber-500/30">
+              Trusted by 500+ Temples
+            </span>
+          </div>
+          <h2 className="text-5xl md:text-6xl lg:text-7xl font-serif font-bold text-gray-900 mb-6 leading-tight">
+            Ready to Transform Your
+            <span className="block text-amber-600 mt-2">Temple Management?</span>
+          </h2>
+          <p className="text-xl md:text-2xl text-gray-700 mb-10 max-w-2xl mx-auto leading-relaxed">
+            Join hundreds of temple organizations already using our platform to streamline operations,
+            engage devotees, and preserve traditions for future generations.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <a
+              href="/login"
+              className="group inline-flex items-center gap-2 px-10 py-5 bg-gradient-to-r from-amber-600 via-amber-600 to-amber-700 text-white rounded-2xl font-bold text-lg shadow-2xl hover:from-amber-700 hover:via-amber-700 hover:to-amber-800 transition-all duration-300 hover:scale-105 hover:shadow-amber-500/50"
+            >
+              Get Started Now
+              <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </a>
+            <a
+              href="#features"
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="inline-flex items-center gap-2 px-10 py-5 bg-white text-gray-700 rounded-2xl font-semibold text-lg border-2 border-gray-300 hover:bg-gray-50 transition-all duration-300 shadow-lg"
+            >
+              Explore Features
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-50 border-t border-gray-200 text-gray-600 py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <p className="text-sm font-medium">
+              © {new Date().getFullYear()} Temple Management Platform. All rights reserved.
+            </p>
+            <p className="text-xs mt-2 text-gray-500">
+              Empowering temple organizations with modern technology
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

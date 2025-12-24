@@ -1,0 +1,47 @@
+import { Content } from './types';
+
+export const mockContents: Content[] = [
+  {
+    id: 'content-1',
+    title: 'Diwali Festival 2024 Announcement',
+    content: '<p>Join us for the grand Diwali celebration on November 12, 2024. Special aarti at 6 PM followed by prasad distribution.</p>',
+    type: 'event',
+    status: 'published',
+    language: 'en',
+    authorId: 'user-1',
+    authorName: 'Priya Sharma',
+    version: 1,
+    createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    publishedAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
+    approvedBy: 'admin-1',
+    approvedAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'content-2',
+    title: 'Temple Timings Update',
+    content: '<p>New temple timings: Morning 6 AM - 12 PM, Evening 4 PM - 9 PM. Closed on Mondays for maintenance.</p>',
+    type: 'notice',
+    status: 'under-review',
+    language: 'en',
+    authorId: 'user-2',
+    authorName: 'Arjun Rao',
+    version: 2,
+    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'content-3',
+    title: 'Ritual Guide: Daily Puja',
+    content: '<p>Complete guide to daily puja rituals including step-by-step instructions and required items.</p>',
+    type: 'ritual-guide',
+    status: 'draft',
+    language: 'en',
+    authorId: 'user-3',
+    authorName: 'Meera Iyer',
+    version: 1,
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+

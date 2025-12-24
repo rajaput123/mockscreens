@@ -1,47 +1,68 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import ModuleLayout from '../../../components/layout/ModuleLayout';
-import { colors, spacing, typography } from '../../../design-system';
+import { getAllTemples, getParentTemples, type Temple } from '../templeData';
 
-interface Temple {
-  id: string;
-  name: string;
-  location: string;
-  parentTempleId?: string;
-  childTemples?: string[];
-}
-
-export default function ManageHierarchyPage() {
+function ManageHierarchyContent() {
   const searchParams = useSearchParams();
   const templeId = searchParams?.get('templeId');
 
+  const [allTemples, setAllTemples] = useState<Temple[]>([]);
   const [selectedParent, setSelectedParent] = useState<string>('');
   const [selectedChildren, setSelectedChildren] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Mock data
-  const allTemples: Temple[] = [
-    { id: '1', name: 'Main Temple Complex', location: 'City Center' },
-    { id: '2', name: 'North Branch Temple', location: 'North District' },
-    { id: '3', name: 'South Branch Temple', location: 'South District' },
-    { id: '4', name: 'East Branch Temple', location: 'East District' },
-  ];
-
-  const parentTemples = allTemples.filter(t => !t.parentTempleId);
-  const availableChildren = allTemples.filter(t => t.id !== selectedParent);
-
+  // Load temples once on mount
   useEffect(() => {
+    const temples = getAllTemples();
+    setAllTemples(temples);
+  }, []);
+
+  // Memoize parent temples and main temple
+  const parentTemples = useMemo(() => {
+    return allTemples.filter(t => t.type === 'parent');
+  }, [allTemples]);
+
+  const mainTemple = useMemo(() => {
+    return parentTemples[0] || null;
+  }, [parentTemples]);
+
+  // Available children: all temples except the main temple itself
+  const availableChildren = useMemo(() => {
+    return allTemples.filter(t => t.id !== selectedParent && t.type === 'child');
+  }, [allTemples, selectedParent]);
+
+  // Initialize selected parent and children only once
+  useEffect(() => {
+    if (isInitialized || allTemples.length === 0) return;
+
+    let initialParent = '';
+    
     if (templeId) {
-      setSelectedParent(templeId);
+      initialParent = templeId;
       // Load existing children for this temple
       const temple = allTemples.find(t => t.id === templeId);
       if (temple?.childTemples) {
         setSelectedChildren(new Set(temple.childTemples));
       }
+    } else if (mainTemple) {
+      initialParent = mainTemple.id;
+      // Load existing children for main temple
+      if (mainTemple.childTemples) {
+        setSelectedChildren(new Set(mainTemple.childTemples));
+      }
     }
-  }, [templeId]);
+
+    if (initialParent) {
+      setSelectedParent(initialParent);
+    }
+    
+    setIsInitialized(true);
+  }, [templeId, mainTemple, allTemples, isInitialized]);
 
   const toggleChild = (childId: string) => {
     const newSelected = new Set(selectedChildren);
@@ -73,168 +94,101 @@ export default function ManageHierarchyPage() {
       title="Manage Temple Hierarchy"
       description="Assign child temples to parent temples"
     >
-      <div 
-        className="rounded-3xl p-6"
-        style={{
-          backgroundColor: colors.background.base,
-          border: `1px solid ${colors.border}`,
-          padding: spacing.xl,
-          maxWidth: '900px',
-        }}
-      >
-        <h2
-          style={{
-            fontFamily: typography.sectionHeader.fontFamily,
-            fontSize: typography.sectionHeader.fontSize,
-            fontWeight: typography.sectionHeader.fontWeight,
-            marginBottom: spacing.lg,
-            color: colors.text.primary,
-          }}
-        >
+      <div className="bg-white border border-gray-200 rounded-3xl p-6 max-w-4xl shadow-sm">
+        <h2 className="font-serif text-xl font-medium mb-6 text-gray-900">
           Assign Child Temples
         </h2>
 
-        {/* Parent Temple Selector */}
-        <div style={{ marginBottom: spacing.xl }}>
-          <label
-            htmlFor="parentTemple"
-            style={{
-              display: 'block',
-              marginBottom: spacing.sm,
-              fontFamily: typography.body.fontFamily,
-              fontSize: typography.body.fontSize,
-              fontWeight: 600,
-              color: colors.text.primary,
-            }}
-          >
-            Select Parent Temple <span style={{ color: '#dc2626' }}>*</span>
-          </label>
-          <select
-            id="parentTemple"
-            value={selectedParent}
-            onChange={(e) => {
-              setSelectedParent(e.target.value);
-              setSelectedChildren(new Set());
-            }}
-            className="rounded-2xl"
-            style={{
-              width: '100%',
-              padding: spacing.base,
-              border: `1px solid ${colors.border}`,
-              fontFamily: typography.body.fontFamily,
-              fontSize: typography.body.fontSize,
-              color: colors.text.primary,
-              backgroundColor: colors.background.base,
-            }}
-          >
-            <option value="">Select a parent temple...</option>
-            {parentTemples.map((temple) => (
-              <option key={temple.id} value={temple.id}>
-                {temple.name} - {temple.location}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Main Temple Display */}
+        {mainTemple && (
+          <div className="mb-8 bg-amber-50 border-2 border-amber-600 rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="bg-amber-600 text-white px-3 py-1 rounded-xl text-sm font-semibold font-sans">
+                    Main Temple
+                  </span>
+                  <span className="font-sans text-base font-semibold text-gray-900">
+                    {mainTemple.deity || mainTemple.name}
+                  </span>
+                </div>
+                <p className="font-sans text-sm text-gray-600">
+                  {mainTemple.location}
+                </p>
+              </div>
+              <Link
+                href={`/operations/temple-management/temple-details?templeId=${mainTemple.id}`}
+                className="text-amber-600 hover:text-amber-700 font-sans text-sm font-medium underline"
+              >
+                View Details
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Parent Temple Selector (if multiple parents exist) */}
+        {parentTemples.length > 1 && (
+          <div className="mb-8">
+            <label
+              htmlFor="parentTemple"
+              className="block mb-2 font-sans text-base font-semibold text-gray-900"
+            >
+              Select Parent Temple <span className="text-red-600">*</span>
+            </label>
+            <select
+              id="parentTemple"
+              value={selectedParent}
+              onChange={(e) => {
+                setSelectedParent(e.target.value);
+                setSelectedChildren(new Set());
+              }}
+              className="w-full px-4 py-3 border border-gray-300 rounded-2xl font-sans text-base text-gray-900 focus:ring-2 focus:ring-amber-600 focus:border-amber-600 outline-none transition-all"
+            >
+              {parentTemples.map((temple) => (
+                <option key={temple.id} value={temple.id}>
+                  {temple.name} - {temple.location}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Child Temples Selection */}
         {selectedParent && (
           <>
-            <div style={{ marginBottom: spacing.lg }}>
-              <h3
-                style={{
-                  fontFamily: typography.sectionHeader.fontFamily,
-                  fontSize: typography.body.fontSize,
-                  fontWeight: 600,
-                  marginBottom: spacing.base,
-                  color: colors.text.primary,
-                }}
-              >
+            <div className="mb-6">
+              <h3 className="font-serif text-base font-semibold mb-2 text-gray-900">
                 Select Child Temples
               </h3>
-              <p
-                style={{
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                  color: colors.text.muted,
-                  marginBottom: spacing.base,
-                }}
-              >
+              <p className="font-sans text-base text-gray-600 mb-4">
                 Select the temples that should be child temples of "{parentTemples.find(t => t.id === selectedParent)?.name}".
               </p>
 
-              <div
-                className="rounded-2xl"
-                style={{
-                  border: `1px solid ${colors.border}`,
-                  padding: spacing.base,
-                  maxHeight: '400px',
-                  overflowY: 'auto',
-                  backgroundColor: colors.background.subtle,
-                  display: 'grid',
-                  gridTemplateColumns: '1fr',
-                  gap: spacing.sm,
-                }}
-              >
+              <div className="border border-gray-200 rounded-2xl p-4 max-h-96 overflow-y-auto grid grid-cols-1 gap-2">
                 {availableChildren.length > 0 ? (
                   availableChildren.map((temple) => (
                     <label
                       key={temple.id}
-                      className="rounded-xl"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: spacing.base,
-                        padding: spacing.base,
-                        cursor: 'pointer',
-                        transition: 'background-color 0.2s',
-                        width: '100%',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = colors.background.light;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }}
+                      className="flex items-center gap-4 p-4 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors w-full"
                     >
                       <input
                         type="checkbox"
                         checked={selectedChildren.has(temple.id)}
                         onChange={() => toggleChild(temple.id)}
-                        style={{ cursor: 'pointer' }}
+                        className="cursor-pointer w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-600"
                       />
-                      <div style={{ flex: 1 }}>
-                        <div
-                          style={{
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
-                            fontWeight: 500,
-                            color: colors.text.primary,
-                          }}
-                        >
+                      <div className="flex-1">
+                        <div className="font-sans text-base font-medium text-gray-900">
                           {temple.name}
                         </div>
-                        <div
-                          style={{
-                            fontFamily: typography.body.fontFamily,
-                            fontSize: typography.body.fontSize,
-                            color: colors.text.muted,
-                          }}
-                        >
+                        <div className="font-sans text-base text-gray-600">
                           {temple.location}
                         </div>
                       </div>
                     </label>
                   ))
                 ) : (
-                  <div
-                    style={{
-                      padding: spacing.xl,
-                      textAlign: 'center',
-                      fontFamily: typography.body.fontFamily,
-                      fontSize: typography.body.fontSize,
-                      color: colors.text.muted,
-                    }}
-                  >
+                  <div className="px-6 py-8 text-center font-sans text-base text-gray-600">
                     No available temples to assign as children.
                   </div>
                 )}
@@ -243,41 +197,18 @@ export default function ManageHierarchyPage() {
 
             {/* Preview */}
             {selectedChildren.size > 0 && (
-              <div
-                className="rounded-2xl"
-                style={{
-                  marginBottom: spacing.xl,
-                  padding: spacing.base,
-                  backgroundColor: colors.background.subtle,
-                  border: `1px solid ${colors.border}`,
-                }}
-              >
-                <h3
-                  style={{
-                    fontFamily: typography.sectionHeader.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    fontWeight: 600,
-                    marginBottom: spacing.base,
-                    color: colors.text.primary,
-                  }}
-                >
+              <div className="mb-8 p-4 border border-gray-200 rounded-2xl">
+                <h3 className="font-serif text-base font-semibold mb-4 text-gray-900">
                   Preview
                 </h3>
-                <div
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    marginBottom: spacing.sm,
-                  }}
-                >
+                <div className="font-sans text-base text-gray-900 mb-2">
                   <strong>{parentTemples.find(t => t.id === selectedParent)?.name}</strong> will have {selectedChildren.size} child temple(s):
                 </div>
-                <ul style={{ marginLeft: spacing.lg, color: colors.text.muted }}>
+                <ul className="ml-6 text-gray-600 list-disc">
                   {Array.from(selectedChildren).map((childId) => {
                     const child = allTemples.find(t => t.id === childId);
                     return child ? (
-                      <li key={childId} style={{ marginBottom: spacing.xs }}>
+                      <li key={childId} className="mb-1">
                         {child.name} - {child.location}
                       </li>
                     ) : null;
@@ -287,22 +218,15 @@ export default function ManageHierarchyPage() {
             )}
 
             {/* Save Button */}
-            <div style={{ display: 'flex', gap: spacing.base, justifyContent: 'flex-end' }}>
+            <div className="flex gap-4 justify-end">
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="rounded-2xl"
-                style={{
-                  padding: `${spacing.base} ${spacing.lg}`,
-                  backgroundColor: isSaving ? colors.text.muted : colors.primary.base,
-                  color: '#ffffff',
-                  border: 'none',
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                  fontWeight: 500,
-                  cursor: isSaving ? 'not-allowed' : 'pointer',
-                  opacity: isSaving ? 0.6 : 1,
-                }}
+                className={`px-6 py-3 rounded-2xl text-white font-sans text-base font-medium transition-all duration-200 ${
+                  isSaving
+                    ? 'bg-gray-400 cursor-not-allowed opacity-60'
+                    : 'bg-amber-600 hover:bg-amber-700 cursor-pointer shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95'
+                }`}
               >
                 {isSaving ? 'Saving...' : 'Save Hierarchy'}
               </button>
@@ -311,15 +235,7 @@ export default function ManageHierarchyPage() {
         )}
 
         {!selectedParent && (
-          <div
-            style={{
-              padding: spacing.xl,
-              textAlign: 'center',
-              fontFamily: typography.body.fontFamily,
-              fontSize: typography.body.fontSize,
-              color: colors.text.muted,
-            }}
-          >
+          <div className="px-6 py-8 text-center font-sans text-base text-gray-600">
             Please select a parent temple to begin managing its hierarchy.
           </div>
         )}
@@ -328,3 +244,19 @@ export default function ManageHierarchyPage() {
   );
 }
 
+export default function ManageHierarchyPage() {
+  return (
+    <Suspense fallback={
+      <ModuleLayout
+        title="Manage Hierarchy"
+        description="Manage temple hierarchy and relationships"
+      >
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-500">Loading...</div>
+        </div>
+      </ModuleLayout>
+    }>
+      <ManageHierarchyContent />
+    </Suspense>
+  );
+}

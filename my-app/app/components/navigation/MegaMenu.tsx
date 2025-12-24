@@ -157,7 +157,7 @@ export default function MegaMenu({
                   letterSpacing: '0.5px',
                 }}
               >
-                Sub Module
+                Manage
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
                 {currentCategory.subServices.map((item) => {
@@ -191,7 +191,11 @@ export default function MegaMenu({
                     'reports-audit': 'finance',
                   };
                   const category = categoryMap[currentCategory.id] || 'operations';
-                  const href = `/${category}/${currentCategory.id}/${item.id}`;
+                  // Special handling for create-event - link to event management page with query param
+                  let href = `/${category}/${currentCategory.id}/${item.id}`;
+                  if (item.id === 'create-event' && currentCategory.id === 'event-management') {
+                    href = `/${category}/${currentCategory.id}?action=create`;
+                  }
                   
                   return (
                     <Link
@@ -252,7 +256,7 @@ export default function MegaMenu({
                   letterSpacing: '0.5px',
                 }}
               >
-                Function
+                View
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
                 {currentCategory.functions.map((item) => {
@@ -286,7 +290,8 @@ export default function MegaMenu({
                     'reports-audit': 'finance',
                   };
                   const category = categoryMap[currentCategory.id] || 'operations';
-                  const href = `/${category}/${currentCategory.id}/${item.id}`;
+                  // If item.id is empty, it means it's the main dashboard (root page)
+                  const href = item.id ? `/${category}/${currentCategory.id}/${item.id}` : `/${category}/${currentCategory.id}`;
                   
                   return (
                     <Link

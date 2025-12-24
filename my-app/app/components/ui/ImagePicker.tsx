@@ -20,9 +20,31 @@ export default function ImagePicker({ value, onChange, label, className = '' }: 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        e.target.value = ''; // Reset file input
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size should be less than 5MB');
+        e.target.value = ''; // Reset file input
+        return;
+      }
+
       const reader = new FileReader();
       reader.onloadend = () => {
-        onChange(reader.result as string);
+        if (reader.result) {
+          onChange(reader.result as string);
+          // Reset file input to allow re-uploading the same file
+          e.target.value = '';
+        }
+      };
+      reader.onerror = () => {
+        alert('Error reading image file. Please try again.');
+        e.target.value = ''; // Reset file input
       };
       reader.readAsDataURL(file);
     }
@@ -90,7 +112,13 @@ export default function ImagePicker({ value, onChange, label, className = '' }: 
       <div className="space-y-4">
         {/* Current Image Preview */}
         {value && (
-          <div className="relative w-32 h-32 rounded-2xl overflow-hidden border-2" style={{ borderColor: colors.border }}>
+          <div 
+            className="relative w-32 h-32 rounded-2xl overflow-hidden border-2" 
+            style={{ 
+              borderColor: colors.border,
+              backgroundColor: colors.background.subtle
+            }}
+          >
             <img
               src={value}
               alt="Selected"

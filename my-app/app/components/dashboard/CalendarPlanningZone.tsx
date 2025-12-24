@@ -249,7 +249,7 @@ export default function CalendarPlanningZone({ events }: CalendarPlanningZonePro
           <div className="grid grid-cols-7 gap-1">
             {days.map((day, index) => {
               const isDaySelected = selectedDay === day;
-              const isDayToday = isToday(day);
+              const isDayToday = day !== null ? isToday(day) : false;
               // Today should always be highlighted (with border), selected day gets background
               const isTodayAndNotSelected = isDayToday && !isDaySelected;
               const classNameForDay = day === null
@@ -574,14 +574,14 @@ export default function CalendarPlanningZone({ events }: CalendarPlanningZonePro
                 className={`aspect-square flex items-center justify-center text-xs rounded ${
                   day === null
                     ? 'text-transparent'
-                    : isTodayInMonth(day)
+                    : day !== null && isTodayInMonth(day)
                     ? 'text-white font-semibold'
                     : 'hover:bg-gray-100'
                 }`}
                 style={{
                   fontFamily: typography.bodySmall.fontFamily,
                   fontSize: '10px',
-                  ...(isTodayInMonth(day) && { backgroundColor: colors.primary.base }),
+                  ...(day !== null && isTodayInMonth(day) && { backgroundColor: colors.primary.base }),
                 }}
               >
                 {day}

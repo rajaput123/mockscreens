@@ -39,7 +39,7 @@ export default function Breadcrumbs({ items }: BreadcrumbsProps) {
     const moduleMap: Record<string, string> = {
       'operational-planning': 'Operational Planning & Control',
       'task-workflow': 'Task & Workflow Orchestration',
-      'ritual-seva-booking': 'Ritual, Seva & Booking Management',
+      'ritual-seva-booking': 'Seva and Darshan Management',
       'crowd-capacity': 'Crowd & Capacity Management',
       'kitchen-prasad': 'Kitchen & Prasad Operations',
       'perishable-inventory': 'Perishable Inventory Management',

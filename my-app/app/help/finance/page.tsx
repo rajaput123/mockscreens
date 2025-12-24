@@ -12,9 +12,8 @@ export default function FinanceHelpPage() {
     >
       <Header />
       <main 
-        className="mx-auto"
+        className="mx-auto max-w-7xl container-responsive"
         style={{ 
-          maxWidth: spacing.containerMaxWidth,
           paddingLeft: spacing.contentPadding,
           paddingRight: spacing.contentPadding,
           paddingTop: spacing.contentPaddingY,

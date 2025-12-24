@@ -15,8 +15,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Temple Dashboard",
-  description: "Temple Management SaaS Dashboard",
+  title: "Temple Management Platform - Transform Your Temple Operations",
+  description: "Comprehensive temple management solution for modern organizations. Manage temples, finances, events, devotees, and more.",
 };
 
 export default function RootLayout({

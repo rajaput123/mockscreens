@@ -4,6 +4,7 @@ import { useState } from 'react';
 import ModuleLayout from '../../../components/layout/ModuleLayout';
 import { Modal } from '../../../components';
 import { colors, spacing, typography } from '../../../design-system';
+import AddEmployeeModal from '../components/AddEmployeeModal';
 
 interface Employee {
   id: string;
@@ -15,17 +16,6 @@ interface Employee {
   status: 'active' | 'inactive';
   joinDate: string;
   employeeId: string;
-}
-
-interface EmployeeFormData {
-  employeeId: string;
-  name: string;
-  email: string;
-  phone: string;
-  role: string;
-  department: string;
-  status: 'active' | 'inactive';
-  joinDate: string;
 }
 
 const initialEmployees: Employee[] = [
@@ -72,22 +62,8 @@ export default function AddEmployeePage() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
-
-  const [formData, setFormData] = useState<EmployeeFormData>({
-    employeeId: '',
-    name: '',
-    email: '',
-    phone: '',
-    role: '',
-    department: '',
-    status: 'active',
-    joinDate: '',
-  });
-
-  const [errors, setErrors] = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
 
   const filteredEmployees = employees.filter((emp) => {
     const matchesSearch =
@@ -111,66 +87,23 @@ export default function AddEmployeePage() {
     setIsDetailModalOpen(true);
   };
 
-  const handleFormChange = (field: keyof EmployeeFormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: undefined }));
-    }
-  };
+  const handleAddEmployee = (formData: any) => {
+    const newEmployee: Employee = {
+      id: crypto.randomUUID(),
+      name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      role: formData.role,
+      department: formData.department,
+      status: formData.status,
+      joinDate: formData.joinDate,
+      employeeId: formData.employeeId,
+    };
 
-  const validate = (): boolean => {
-    const newErrors: Partial<Record<keyof EmployeeFormData, string>> = {};
-
-    if (!formData.employeeId.trim()) newErrors.employeeId = 'Employee ID is required';
-    if (!formData.name.trim()) newErrors.name = 'Name is required';
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Invalid email format';
-    }
-    if (!formData.phone.trim()) newErrors.phone = 'Phone is required';
-    if (!formData.role.trim()) newErrors.role = 'Role is required';
-    if (!formData.department.trim()) newErrors.department = 'Department is required';
-    if (!formData.joinDate.trim()) newErrors.joinDate = 'Join date is required';
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleAddEmployee = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validate()) return;
-
-    setIsSubmitting(true);
-    try {
-      const newEmployee: Employee = {
-        id: crypto.randomUUID(),
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        role: formData.role,
-        department: formData.department,
-        status: formData.status,
-        joinDate: formData.joinDate,
-        employeeId: formData.employeeId,
-      };
-
-      setEmployees((prev) => [newEmployee, ...prev]);
-      setIsAddModalOpen(false);
-      setFormData({
-        employeeId: '',
-        name: '',
-        email: '',
-        phone: '',
-        role: '',
-        department: '',
-        status: 'active',
-        joinDate: '',
-      });
-      setCurrentPage(1);
-    } finally {
-      setIsSubmitting(false);
-    }
+    setEmployees((prev) => [newEmployee, ...prev]);
+    setIsAddModalOpen(false);
+    setCurrentPage(1);
+    alert('Employee added successfully!');
   };
 
   return (
@@ -697,296 +630,11 @@ export default function AddEmployeePage() {
       </Modal>
 
       {/* Add Employee Modal */}
-      <Modal
+      <AddEmployeeModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        title="Add Employee"
-        size="lg"
-      >
-        <form onSubmit={handleAddEmployee} className="space-y-6">
-          {/* Basic Info */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block mb-2">
-                <span
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    fontWeight: 500,
-                  }}
-                >
-                  Employee ID *
-                </span>
-              </label>
-              <input
-                type="text"
-                value={formData.employeeId}
-                onChange={(e) => handleFormChange('employeeId', e.target.value)}
-                className="w-full px-4 py-2 rounded-2xl border focus:outline-none focus:ring-2"
-                style={{
-                  borderColor: errors.employeeId ? colors.error.base : colors.border,
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                }}
-              />
-              {errors.employeeId && (
-                <p className="mt-1 text-xs" style={{ color: colors.error.base }}>
-                  {errors.employeeId}
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block mb-2">
-                <span
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    fontWeight: 500,
-                  }}
-                >
-                  Name *
-                </span>
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => handleFormChange('name', e.target.value)}
-                className="w-full px-4 py-2 rounded-2xl border focus:outline-none focus:ring-2"
-                style={{
-                  borderColor: errors.name ? colors.error.base : colors.border,
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                }}
-              />
-              {errors.name && (
-                <p className="mt-1 text-xs" style={{ color: colors.error.base }}>
-                  {errors.name}
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block mb-2">
-                <span
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    fontWeight: 500,
-                  }}
-                >
-                  Email *
-                </span>
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => handleFormChange('email', e.target.value)}
-                className="w-full px-4 py-2 rounded-2xl border focus:outline-none focus:ring-2"
-                style={{
-                  borderColor: errors.email ? colors.error.base : colors.border,
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                }}
-              />
-              {errors.email && (
-                <p className="mt-1 text-xs" style={{ color: colors.error.base }}>
-                  {errors.email}
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block mb-2">
-                <span
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    fontWeight: 500,
-                  }}
-                >
-                  Phone *
-                </span>
-              </label>
-              <input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => handleFormChange('phone', e.target.value)}
-                className="w-full px-4 py-2 rounded-2xl border focus:outline-none focus:ring-2"
-                style={{
-                  borderColor: errors.phone ? colors.error.base : colors.border,
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                }}
-              />
-              {errors.phone && (
-                <p className="mt-1 text-xs" style={{ color: colors.error.base }}>
-                  {errors.phone}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Role & Department */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block mb-2">
-                <span
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    fontWeight: 500,
-                  }}
-                >
-                  Role *
-                </span>
-              </label>
-              <input
-                type="text"
-                value={formData.role}
-                onChange={(e) => handleFormChange('role', e.target.value)}
-                className="w-full px-4 py-2 rounded-2xl border focus:outline-none focus:ring-2"
-                style={{
-                  borderColor: errors.role ? colors.error.base : colors.border,
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                }}
-              />
-              {errors.role && (
-                <p className="mt-1 text-xs" style={{ color: colors.error.base }}>
-                  {errors.role}
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block mb-2">
-                <span
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    fontWeight: 500,
-                  }}
-                >
-                  Department *
-                </span>
-              </label>
-              <input
-                type="text"
-                value={formData.department}
-                onChange={(e) => handleFormChange('department', e.target.value)}
-                className="w-full px-4 py-2 rounded-2xl border focus:outline-none focus:ring-2"
-                style={{
-                  borderColor: errors.department ? colors.error.base : colors.border,
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                }}
-              />
-              {errors.department && (
-                <p className="mt-1 text-xs" style={{ color: colors.error.base }}>
-                  {errors.department}
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block mb-2">
-                <span
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    fontWeight: 500,
-                  }}
-                >
-                  Status
-                </span>
-              </label>
-              <select
-                value={formData.status}
-                onChange={(e) =>
-                  handleFormChange('status', e.target.value as EmployeeFormData['status'])
-                }
-                className="w-full px-4 py-2 rounded-2xl border focus:outline-none focus:ring-2"
-                style={{
-                  borderColor: colors.border,
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                }}
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Join Date */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block mb-2">
-                <span
-                  style={{
-                    fontFamily: typography.body.fontFamily,
-                    fontSize: typography.body.fontSize,
-                    color: colors.text.primary,
-                    fontWeight: 500,
-                  }}
-                >
-                  Join Date *
-                </span>
-              </label>
-              <input
-                type="date"
-                value={formData.joinDate}
-                onChange={(e) => handleFormChange('joinDate', e.target.value)}
-                className="w-full px-4 py-2 rounded-2xl border focus:outline-none focus:ring-2"
-                style={{
-                  borderColor: errors.joinDate ? colors.error.base : colors.border,
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                }}
-              />
-              {errors.joinDate && (
-                <p className="mt-1 text-xs" style={{ color: colors.error.base }}>
-                  {errors.joinDate}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t" style={{ borderColor: colors.border }}>
-            <button
-              type="button"
-              onClick={() => setIsAddModalOpen(false)}
-              className="px-6 py-2 rounded-2xl border-2 transition-all hover:scale-105"
-              style={{
-                borderColor: colors.border,
-                color: colors.text.primary,
-                fontFamily: typography.body.fontFamily,
-                fontSize: typography.body.fontSize,
-                fontWeight: 500,
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-6 py-2 rounded-2xl transition-all hover:scale-105 disabled:opacity-50"
-              style={{
-                backgroundColor: colors.primary.base,
-                color: '#ffffff',
-                fontFamily: typography.body.fontFamily,
-                fontSize: typography.body.fontSize,
-                fontWeight: 500,
-              }}
-            >
-              {isSubmitting ? 'Saving...' : 'Save Employee'}
-            </button>
-          </div>
-        </form>
-      </Modal>
+        onSave={handleAddEmployee}
+      />
     </ModuleLayout>
   );
 }

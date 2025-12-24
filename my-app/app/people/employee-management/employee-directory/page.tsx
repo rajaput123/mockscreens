@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import ModuleLayout from '../../../components/layout/ModuleLayout';
 import { Modal } from '../../../components';
-import { colors, spacing, typography } from '../../../design-system';
+import { colors, spacing, typography, shadows, borders } from '../../../design-system';
+import { ModernCard, ElevatedCard } from '../../components';
 
 interface Employee {
   id: string;
@@ -85,14 +86,7 @@ export default function EmployeeDirectoryPage() {
       description="View all employees in a card-based view"
     >
       {/* Search and Filters */}
-      <div
-        className="rounded-3xl p-6 mb-6"
-        style={{
-          backgroundColor: colors.background.base,
-          border: `1px solid ${colors.border}`,
-          padding: spacing.xl,
-        }}
-      >
+      <ModernCard elevation="md" className="mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Search */}
           <div>
@@ -101,11 +95,12 @@ export default function EmployeeDirectoryPage() {
               placeholder="Search by name, email, or ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 rounded-2xl border focus:outline-none focus:ring-2"
+              className="w-full px-4 py-2 rounded-2xl border focus:outline-none focus:ring-2 transition-all"
               style={{
                 borderColor: colors.border,
                 fontFamily: typography.body.fontFamily,
                 fontSize: typography.body.fontSize,
+                boxShadow: shadows.sm,
               }}
             />
           </div>
@@ -115,11 +110,12 @@ export default function EmployeeDirectoryPage() {
             <select
               value={filterRole}
               onChange={(e) => setFilterRole(e.target.value)}
-              className="w-full px-4 py-2 rounded-2xl border focus:outline-none focus:ring-2"
+              className="w-full px-4 py-2 rounded-2xl border focus:outline-none focus:ring-2 transition-all"
               style={{
                 borderColor: colors.border,
                 fontFamily: typography.body.fontFamily,
                 fontSize: typography.body.fontSize,
+                boxShadow: shadows.sm,
               }}
             >
               <option value="all">All Roles</option>
@@ -136,11 +132,12 @@ export default function EmployeeDirectoryPage() {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full px-4 py-2 rounded-2xl border focus:outline-none focus:ring-2"
+              className="w-full px-4 py-2 rounded-2xl border focus:outline-none focus:ring-2 transition-all"
               style={{
                 borderColor: colors.border,
                 fontFamily: typography.body.fontFamily,
                 fontSize: typography.body.fontSize,
+                boxShadow: shadows.sm,
               }}
             >
               <option value="all">All Status</option>
@@ -149,21 +146,16 @@ export default function EmployeeDirectoryPage() {
             </select>
           </div>
         </div>
-      </div>
+      </ModernCard>
 
       {/* Employee Cards Grid */}
       {filteredEmployees.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredEmployees.map((employee) => (
-            <div
+            <ModernCard
               key={employee.id}
               onClick={() => handleCardClick(employee)}
-              className="rounded-3xl p-6 cursor-pointer transition-all hover:scale-105 hover:shadow-lg"
-              style={{
-                backgroundColor: colors.background.base,
-                border: `1px solid ${colors.border}`,
-                padding: spacing.xl,
-              }}
+              elevation="md"
             >
               <div className="space-y-2">
                 <h3
@@ -241,7 +233,7 @@ export default function EmployeeDirectoryPage() {
                   </span>
                 </div>
               </div>
-            </div>
+            </ModernCard>
           ))}
         </div>
       ) : (

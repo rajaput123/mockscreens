@@ -6,7 +6,7 @@ import Breadcrumbs from './Breadcrumbs';
 
 interface ModuleLayoutProps {
   children: React.ReactNode;
-  title: string;
+  title: string | React.ReactNode;
   description?: string;
   breadcrumbs?: Array<{ label: string; href?: string }>;
   action?: React.ReactNode;
@@ -22,9 +22,8 @@ export default function ModuleLayout({ children, title, description, breadcrumbs
 
       {/* Main Content */}
       <main 
-        className="mx-auto"
+        className="mx-auto max-w-7xl container-responsive"
         style={{ 
-          maxWidth: spacing.containerMaxWidth,
           paddingLeft: spacing.contentPadding,
           paddingRight: spacing.contentPadding,
           paddingTop: spacing.contentPaddingY,
@@ -37,21 +36,27 @@ export default function ModuleLayout({ children, title, description, breadcrumbs
         {/* Page Header */}
         <div 
           className={`mb-12 flex items-start justify-between ${animations.fadeInUp}`}
-          style={{ marginBottom: spacing.sectionGapLarge }}
+          style={{ marginBottom: spacing.lg }}
         >
-          <div>
-            <h1 
-              style={{
-                fontFamily: typography.pageTitle.fontFamily,
-                fontSize: typography.pageTitle.fontSize,
-                fontWeight: typography.pageTitle.fontWeight,
-                lineHeight: typography.pageTitle.lineHeight,
-                marginBottom: spacing.sm,
-                color: colors.text.primary,
-              }}
-            >
-              {title}
-            </h1>
+          <div className="flex-1 w-full">
+            {typeof title === 'string' ? (
+              <h1 
+                style={{
+                  fontFamily: typography.pageTitle.fontFamily,
+                  fontSize: typography.pageTitle.fontSize,
+                  fontWeight: typography.pageTitle.fontWeight,
+                  lineHeight: typography.pageTitle.lineHeight,
+                  marginBottom: spacing.sm,
+                  color: colors.text.primary,
+                }}
+              >
+                {title}
+              </h1>
+            ) : (
+              <div style={{ marginBottom: spacing.sm }}>
+                {title}
+              </div>
+            )}
             {description && (
               <p 
                 style={{
